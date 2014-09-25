@@ -227,7 +227,8 @@ func (gd *GoDat) buildPattern(pat string) {
 
 // 无冲突版本
 // 实现原理:
-//   1 按列插入
+//   1、按列插入
+//   2、加入链表中，如果一个字符串已经全部加入到dat中，把这个字符串删除
 func (gd *GoDat) buildWithoutConflict() {
 
 }
