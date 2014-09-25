@@ -5,6 +5,7 @@ import (
 	"log"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 // double array trie algorithm implement in golang
@@ -153,13 +154,10 @@ func (gd *GoDat) extend() (err error) {
 }
 
 func (gd *GoDat) buildAux() {
-	if gd.auxiliary == nil {
-		gd.auxiliary = make(map[rune]int)
-	}
-
 	// 字符序号从1开始
 	chs := 1
 
+	// 给每个字符标定序号
 	for _, pat := range gd.pats {
 		for _, ch := range pat {
 			if _, ok := gd.auxiliary[ch]; !ok {
@@ -180,20 +178,86 @@ func abs(i int) int {
 	return i
 }
 
+// 将base和check数组组成双向链表，借鉴小稳的C实现原理
+func (gd *GoDat) initLink() {
+	// 数组位置0预留
+	gd.base[0] = 0
+	gd.check[0] = 1
+
+	// 数组从1到length-1的各个位置连接起来
+	length := len(gd.base)
+	for i := 1; i < length; i++ {
+		gd.base[i] = -(i - 1)
+		gd.check[i] = -(i + 1)
+	}
+	gd.base[1] = -(length - 1)
+	gd.check[length-1] = 1
+
+	gd.idles = length - 1
+}
+
+func (gd *GoDat) addLink(s int) {
+	if gd.idles == 0 {
+		gd.check[0] = s
+		gd.base[s] = -s
+		gd.check[s] = -s
+	} else {
+		t := gd.check[0]
+		// 找到s的下一个空节点位置
+		if s > t {
+			for t = -1 * gd.check[t]; t != gd.check[0] && t < s; {
+				t = -1 * gd.check[t]
+			}
+		}
+
+		gd.base[s] = gd.base[t]
+		gd.check[-1*gd.base[t]] = -1 * s
+
+		gd.base[t] = -1 * s
+		gd.check[s] = -1 * t
+
+		if s < gd.check[0] {
+			gd.check[0] = s
+		}
+	}
+
+	gd.idles++
+}
+
+func (gd *GoDat) delLink(s int) {
+	if gd.idles == 1 {
+		gd.check[0] = 0
+	} else {
+		gd.base[-1*gd.check[s]] = gd.base[s]
+		gd.check[-1*gd.base[s]] = gd.check[s]
+
+		// 是首节点的话, 修改check[0]指向下一个空闲的节点
+		if s == gd.check[0] {
+			gd.check[0] = -1 * gd.check[s]
+		}
+	}
+	gd.idles--
+}
+
 // 创建
 func (gd *GoDat) Build() (err error) {
 	gd.base = make([]int, initArrayLen)
 	gd.check = make([]int, initArrayLen)
 	gd.auxiliary = make(map[rune]int)
 
+	//将base和check组成双向链表
+	gd.initLink()
 	// 创建字符辅助表
 	gd.buildAux()
 
 	// 对pattern排序, 节省空间
 	sort.Sort(sort.StringSlice(gd.pats))
 
-	// 第一个非首字母将要插入的位置
-	gd.nextPos = len(gd.pats)
+	for _, s := range gd.pats {
+		if err = gd.buildPattern(s); err != nil {
+			return
+		}
+	}
 
 	return
 }
@@ -216,13 +280,34 @@ func (gd *GoDat) nextState(s, c int) int {
 }
 
 // 增加一个模式
-func (gd *GoDat) buildPattern(pat string) {
-	arrLen := len(gd.base)
-	patLen := len(pat)
+func (gd *GoDat) buildPattern(pat string) (err error) {
+	var (
+		r          rune
+		c, i, s, t = 0, 0, 0, 0
+		arrLen     = len(gd.base)
+		patLen     = len(pat)
+	)
 
-	for i, r := range pat {
+	for i, r = range pat {
+		if gd.nocase {
+			r = unicode.ToLower(r)
+		}
+		c = gd.auxiliary[r]
+		t = gd.nextState(s, c)
+		if t == -1 {
+			// 该字符在dat中没有，插入
+			break
+		} else {
+			s = t
+		}
+	}
+
+	//b = gd.findBase()
+	for ; i < patLen; i++ {
 
 	}
+
+	return
 }
 
 // 无冲突版本
