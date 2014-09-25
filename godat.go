@@ -265,18 +265,39 @@ func (gd *GoDat) Build() (err error) {
 // 获取s的下一个字符r是否存在，存在返回下标，不存在返回-1
 func (gd *GoDat) nextState(s, c int) int {
 	// gd.check[0] should always be 0
+	if s == 0 {
+		return c
+	}
+
 	if gd.check[s] < 0 {
 		return -1
 	}
 
+	// base[i] == 0 为临时状态，表明该位置的字符刚刚插入，其base值需要由
+	// 后面的字符来确定
+	if gd.base[s] == 0 {
+		return 0
+	}
 	// 检查状态转移表
 	// c := gd.auxiliary[r]
-	t := gd.base[s] + c
+	t := -1*gd.base[s] + c
 	if gd.check[t] != s {
 		return -1
 	}
 
 	return t
+}
+
+func (gd *GoDat) findBase(s, c int) int {
+	if gd.idles > 0 {
+		for b := gd.check[0]; gd.check[b+c] >= 0; b = -1 * gd.check[b] {
+			if gd.check[b+c] < 0 {
+				gd.delLink(b)
+				return b
+			}
+		}
+	}
+	// 数组需要扩张
 }
 
 // 增加一个模式
@@ -292,14 +313,21 @@ func (gd *GoDat) buildPattern(pat string) (err error) {
 		if gd.nocase {
 			r = unicode.ToLower(r)
 		}
+
 		c = gd.auxiliary[r]
 		t = gd.nextState(s, c)
-		if t == -1 {
-			// 该字符在dat中没有，插入
-			break
-		} else {
+
+		if t == 0 {
+			// s状态的base值等待由c来确定
+			b := gd.findBase(s)
+
+		} else if t != -1 {
 			s = t
+			continue
 		}
+		// t == -1
+		// 该字符不在dat数组中，新插入字符
+
 	}
 
 	//b = gd.findBase()
