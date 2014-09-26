@@ -11,6 +11,8 @@ import (
 // double array trie algorithm implement in golang
 // go实现的双数组
 
+const DAT_END_POS = -2147483648
+
 var (
 	minReserve      int     = 5
 	maxReserve      int     = 64
@@ -25,7 +27,8 @@ type GoDat struct {
 	check []int  // check 表
 	// 辅助词表, 根据字(rune)来查找该字在base数组中的位置(下标)
 	// 如果ascii为true，则不需要辅助词表
-	auxiliary map[rune]int
+	auxiliary    map[rune]int
+	revAuxiliary map[int]rune
 	// patterns
 	pats []string
 	// 下一个将要使用的位置
@@ -135,7 +138,8 @@ func (gd *GoDat) SetOptions(opts map[string]interface{}) {
 
 // 扩大数组长度
 func (gd *GoDat) extend() (err error) {
-	length := len(gd.base) * 2
+	orgLen := len(gd.base)
+	length := orgLen * 2
 	if length > gd.maxLen {
 		err = fmt.Errorf("Array cannot exceed dat's maxLen: %d", gd.maxLen)
 		return
@@ -147,8 +151,31 @@ func (gd *GoDat) extend() (err error) {
 	copy(base, gd.base)
 	copy(check, gd.check)
 
+	// 将base和check数组的新元素连接起来
+	for i := orgLen; i < length; i++ {
+		base[i] = -(i - 1)
+		check[i] = -(i + 1)
+	}
+	if check[0] == 0 {
+		// 原来已经没有空位置
+		check[0] = orgLen
+		base[orgLen] = -(length - 1)
+		check[length-1] = -orgLen
+	} else {
+		// 将扩展出的位置与原来的空闲位置连接起来
+		first := check[0]
+		last := -1 * base[first]
+
+		base[orgLen] = last
+		check[last] = orgLen
+
+		base[first] = length - 1
+		check[length-1] = first
+	}
+
 	gd.base = base
 	gd.check = check
+	gd.idles += orgLen
 
 	return nil
 }
@@ -162,6 +189,7 @@ func (gd *GoDat) buildAux() {
 		for _, ch := range pat {
 			if _, ok := gd.auxiliary[ch]; !ok {
 				gd.auxiliary[ch] = chs
+				gd.revAuxiliary[chs] = ch
 				chs++
 			}
 		}
@@ -244,6 +272,7 @@ func (gd *GoDat) Build() (err error) {
 	gd.base = make([]int, initArrayLen)
 	gd.check = make([]int, initArrayLen)
 	gd.auxiliary = make(map[rune]int)
+	gd.revAuxiliary = make(map[int]rune)
 
 	//将base和check组成双向链表
 	gd.initLink()
@@ -262,7 +291,7 @@ func (gd *GoDat) Build() (err error) {
 	return
 }
 
-// 获取s的下一个字符r是否存在，存在返回下标，不存在返回-1
+// 获取s位置的下一个字符r(编码为c)是否存在，存在返回下标，不存在返回-1
 func (gd *GoDat) nextState(s, c int) int {
 	// gd.check[0] should always be 0
 	if s == 0 {
@@ -273,11 +302,6 @@ func (gd *GoDat) nextState(s, c int) int {
 		return -1
 	}
 
-	// base[i] == 0 为临时状态，表明该位置的字符刚刚插入，其base值需要由
-	// 后面的字符来确定
-	if gd.base[s] == 0 {
-		return 0
-	}
 	// 检查状态转移表
 	// c := gd.auxiliary[r]
 	t := -1*gd.base[s] + c
@@ -289,15 +313,85 @@ func (gd *GoDat) nextState(s, c int) int {
 }
 
 func (gd *GoDat) findBase(s, c int) int {
+	if gd.base[s] < 0 {
+		return 1
+	}
+	return gd.base[s]
+}
+
+func (gd *GoDat) findIdle() int {
+	return 0
+}
+
+func (gd *GoDat) __find_pos(s, c int) int {
 	if gd.idles > 0 {
-		for b := gd.check[0]; gd.check[b+c] >= 0; b = -1 * gd.check[b] {
-			if gd.check[b+c] < 0 {
-				gd.delLink(b)
-				return b
+		start := s
+		// 字符c的位置在s的后面
+		if start <= c {
+			// |base[s]|+c=start, 防止|base[s]| <= 0的情况
+			start = c + 1
+		}
+		for start < len(gd.base) {
+			if gd.check[start] < 0 {
+				return start
 			}
+			start++
 		}
 	}
-	// 数组需要扩张
+	if err := gd.extend(); err != nil {
+		return -1
+	}
+	return len(gd.base) / 2
+}
+
+// 为s的下一个状态c找到一个位置
+// 返回：
+//		pos: c的位置, -1 为失败
+//      exist: pos位置是否有字符c
+//      conflict: 是否冲突
+func (gd *GoDat) findPos(s, c int) (pos int, exist, conflict bool) {
+	if s == 0 {
+		pos = c
+	} else {
+		if gd.base[s] > 0 {
+			// 只有base[0] = 0
+			pos = gd.base[s] + c
+		} else if gd.base[s] == 0 || gd.base[s] == DAT_END_POS {
+			// base[s] == DAT_END_POS 该位置是一个结束位置
+			// 为c找到位置
+			pos = gd.__find_pos(s, c)
+			return
+		} else {
+			// base[s] < 0
+			// base[s]是一个结束字符，且该字符后有其他字符
+			pos = -1*gd.base[s] + c
+
+		}
+	}
+
+	if gd.check[pos] == s {
+		exist = true
+		return
+	}
+
+	if gd.check[pos] < 0 {
+		pos = gd.__find_pos(s, c)
+	} else { // check [pos]不可能=0
+		conflict = true
+	}
+
+	return
+}
+
+// 以pat[index]开头的后续节点
+func (gd *GoDat) states(pat string, index int) []rune {
+
+}
+
+// 解除冲突 resolve conflicts
+//
+func (gd *GoDat) resolve(pat string, index int, s, c int) (err error) {
+	return
 }
 
 // 增加一个模式
@@ -307,6 +401,8 @@ func (gd *GoDat) buildPattern(pat string) (err error) {
 		c, i, s, t = 0, 0, 0, 0
 		arrLen     = len(gd.base)
 		patLen     = len(pat)
+		exist      bool
+		conflict   bool
 	)
 
 	for i, r = range pat {
@@ -315,19 +411,37 @@ func (gd *GoDat) buildPattern(pat string) (err error) {
 		}
 
 		c = gd.auxiliary[r]
-		t = gd.nextState(s, c)
+		t, exist, conflict = gd.findPos(s, c)
 
-		if t == 0 {
-			// s状态的base值等待由c来确定
-			b := gd.findBase(s)
-
-		} else if t != -1 {
-			s = t
-			continue
+		if t < 0 {
+			return fmt.Errorf("build pattern %s(%d) failed: array length=%d", pat, i, arrLen)
 		}
-		// t == -1
-		// 该字符不在dat数组中，新插入字符
 
+		if exist {
+			s = t
+		} else {
+			// exist==false的情况下, conflict有可能为true, 也有可能为false
+			if conflict {
+
+			} else {
+				// base值由下一个确定
+				gd.base[t] = 0
+				gd.check[t] = s
+				gd.delLink(t)
+				s = t
+			}
+		}
+
+		if i == patLen-1 {
+			// r为最后一个字符
+			if gd.base[t] > 0 {
+				gd.base[t] = -1 * gd.base[t]
+			} else if gd.base[t] == 0 {
+				gd.base[t] = DAT_END_POS
+			}
+		} else {
+
+		}
 	}
 
 	//b = gd.findBase()
