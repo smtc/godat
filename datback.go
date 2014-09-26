@@ -24,5 +24,14 @@ func (gd *GoDat) backtrace(s int) string {
 		res += string(r)
 	}
 
-	return res
+	rev := ""
+	for i = len(res) - 1; i >= 0; i-- {
+		rev += res[i]
+	}
+
+	return rev
+}
+
+func (gd *GoDat) howmany() {
+
 }
