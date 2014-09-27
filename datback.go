@@ -1,11 +1,10 @@
 package godat
 
 import (
-	"strings"
+//"strings"
 )
 
 //回溯
-
 func (gd *GoDat) backtrace(s int) string {
 	res := ""
 	prevPos := gd.check[s]
@@ -23,15 +22,58 @@ func (gd *GoDat) backtrace(s int) string {
 		r := gd.revAuxiliary[code]
 		res += string(r)
 	}
-
-	rev := ""
-	for i = len(res) - 1; i >= 0; i-- {
-		rev += res[i]
+	// 反转字符串
+	runes := []rune(res)
+	for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
+		runes[i], runes[j] = runes[j], runes[i]
 	}
-
-	return rev
+	return string(runes)
 }
 
-func (gd *GoDat) howmany() {
+// 计算gd的patterns中以p开头的字符串的数量
+func (gd *GoDat) prefixCount(p string) (runes []rune) {
+	patLen := len(gd.pats)
+	// 二分查找最接近的位置
+	pos := gd.binSearch(p) + 1
+	plen := len(p)
+	rm := make(map[rune]bool)
+	for pos < patLen && len(gd.pats[pos]) > plen && gd.pats[pos][0:plen] == p {
+		pat := gd.pats[pos]
+		r := rune(pat[plen])
+		if _, ok := rm[r]; !ok {
+			rm[rune(r)] = true
+			runes = append(runes, rune(r))
+		}
+		pos++
+	}
 
+	return
+}
+
+func (gd *GoDat) binSearch(p string) int {
+	var (
+		left   = 0
+		right  = len(gd.pats)
+		middle = 0
+	)
+	//如果这里是int right = n 的话，那么下面有两处地方需要修改，以保证一一对应：
+	//1、下面循环的条件则是while(left < right)
+	//2、循环内当array[middle]>value 的时候，right = mid
+	//循环条件，适时而变
+	for left < right {
+		middle = left + ((right - left) >> 1) //防止溢出，移位也更高效。同时，每次循环都需要更新。
+
+		if gd.pats[middle] > p {
+			right = middle //right赋值，适时而变
+		} else if gd.pats[middle] < p {
+			left = middle + 1
+		} else {
+			return middle
+		}
+		//可能会有读者认为刚开始时就要判断相等，但毕竟数组中不相等的情况更多
+		//如果每次循环都判断一下是否相等，将耗费时间
+	}
+
+	//return -1
+	return right
 }

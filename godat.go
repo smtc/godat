@@ -384,8 +384,8 @@ func (gd *GoDat) findPos(s, c int) (pos int, exist, conflict bool) {
 }
 
 // 以pat[index]开头的后续节点
-func (gd *GoDat) states(pat string, index int) []rune {
-
+func (gd *GoDat) states(pat string, index int) (runes []rune) {
+	return
 }
 
 // 解除冲突 resolve conflicts
