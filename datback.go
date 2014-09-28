@@ -1,11 +1,13 @@
 package godat
 
 import (
-//"strings"
+	//"strings"
+	"unicode/utf8"
 )
 
-//回溯
-func (gd *GoDat) backtrace(s int) string {
+// 回溯
+// 获取数组s位置的所有下一状态的runes
+func (gd *GoDat) backtrace(s int) []rune {
 	res := ""
 	prevPos := gd.check[s]
 	for prevPos > 0 {
@@ -27,7 +29,8 @@ func (gd *GoDat) backtrace(s int) string {
 	for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
 		runes[i], runes[j] = runes[j], runes[i]
 	}
-	return string(runes)
+
+	return gd.prefixCount(string(runes))
 }
 
 // 计算gd的patterns中以p开头的字符串的数量
@@ -39,7 +42,8 @@ func (gd *GoDat) prefixCount(p string) (runes []rune) {
 	rm := make(map[rune]bool)
 	for pos < patLen && len(gd.pats[pos]) > plen && gd.pats[pos][0:plen] == p {
 		pat := gd.pats[pos]
-		r := rune(pat[plen])
+		r, _ := utf8.DecodeRuneInString(pat[plen:])
+
 		if _, ok := rm[r]; !ok {
 			rm[rune(r)] = true
 			runes = append(runes, rune(r))

@@ -325,17 +325,16 @@ func (gd *GoDat) findIdle() int {
 
 func (gd *GoDat) __find_pos(s, c int) int {
 	if gd.idles > 0 {
-		start := s
-		// 字符c的位置在s的后面
-		if start <= c {
-			// |base[s]|+c=start, 防止|base[s]| <= 0的情况
-			start = c + 1
-		}
-		for start < len(gd.base) {
-			if gd.check[start] < 0 {
-				return start
+		start := gd.check[0]
+		pos := 0
+		for pos = start; pos <= c; {
+			pos = -1 * gd.check[pos]
+			if pos == start {
+				break
 			}
-			start++
+		}
+		if pos > start {
+			return start
 		}
 	}
 	if err := gd.extend(); err != nil {
@@ -353,10 +352,18 @@ func (gd *GoDat) findPos(s, c int) (pos int, exist, conflict bool) {
 	if s == 0 {
 		pos = c
 	} else {
-		if gd.base[s] > 0 {
+		if gd.base[s] == 0 {
+			// base[s] == 0 该位置是一个中间状态，其base值由找到的位置和c来决定
+			// 为c找到位置
+			pos = gd.__find_pos(s, c)
+			if pos > 0 {
+				gd.base[s] = pos - c
+			}
+			return
+		} else if gd.base[s] > 0 {
 			// 只有base[0] = 0
 			pos = gd.base[s] + c
-		} else if gd.base[s] == 0 || gd.base[s] == DAT_END_POS {
+		} else if gd.base[s] == DAT_END_POS {
 			// base[s] == DAT_END_POS 该位置是一个结束位置
 			// 为c找到位置
 			pos = gd.__find_pos(s, c)
@@ -365,7 +372,6 @@ func (gd *GoDat) findPos(s, c int) (pos int, exist, conflict bool) {
 			// base[s] < 0
 			// base[s]是一个结束字符，且该字符后有其他字符
 			pos = -1*gd.base[s] + c
-
 		}
 	}
 
