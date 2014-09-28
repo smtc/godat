@@ -7,7 +7,10 @@ import (
 
 // 回溯
 // 获取数组s位置的所有下一状态的runes
-func (gd *GoDat) backtrace(s int) []rune {
+func (gd *GoDat) backtrace(s int) []int {
+	if gd.base[s] == DAT_END_POS {
+		return []int{}
+	}
 	res := ""
 	prevPos := gd.check[s]
 	for prevPos > 0 {
@@ -30,7 +33,12 @@ func (gd *GoDat) backtrace(s int) []rune {
 		runes[i], runes[j] = runes[j], runes[i]
 	}
 
-	return gd.prefixCount(string(runes))
+	children := gd.prefixCount(string(runes))
+	ca := make([]int, len(runes))
+	for i, r := range children {
+		ca[i] = gd.auxiliary[r]
+	}
+	return ca
 }
 
 // 计算gd的patterns中以p开头的字符串的数量

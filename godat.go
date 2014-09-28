@@ -253,6 +253,10 @@ func (gd *GoDat) addLink(s int) {
 }
 
 func (gd *GoDat) delLink(s int) {
+	if gd.idles <= 0 {
+		return
+	}
+
 	if gd.idles == 1 {
 		gd.check[0] = 0
 	} else {
@@ -333,8 +337,8 @@ func (gd *GoDat) __find_pos(s, c int) int {
 				break
 			}
 		}
-		if pos > start {
-			return start
+		if pos > c {
+			return pos
 		}
 	}
 	if err := gd.extend(); err != nil {
@@ -382,7 +386,8 @@ func (gd *GoDat) findPos(s, c int) (pos int, exist, conflict bool) {
 
 	if gd.check[pos] < 0 {
 		pos = gd.__find_pos(s, c)
-	} else { // check [pos]不可能=0
+	} else {
+		// gd.check [pos]不可能=0
 		conflict = true
 	}
 
@@ -394,9 +399,86 @@ func (gd *GoDat) states(pat string, index int) (runes []rune) {
 	return
 }
 
+// find new base
+// return -1 if cannot found a free pos
+func (gd *GoDat) findNewBase(s int, ca []int) int {
+	start := gd.check[0]
+	pos := start
+	arrLen := len(gd.base)
+	for {
+		for ; -1*gd.check[pos] != start; pos = -1 * gd.check[pos] {
+			if pos < s {
+				continue
+			}
+			found := true
+			for _, c := range ca {
+				if !(pos+c < arrLen && gd.check[pos+c] < 0) {
+					found = false
+					break
+				}
+			}
+			if found {
+				return pos
+			}
+		}
+		if err := gd.extend(); err != nil {
+			return -1
+		}
+		pos = arrLen
+	}
+
+	return -1
+}
+
+// re-locate
+// s --> b
+func (gd *GoDat) reLocate(s, b int, ca []int) {
+	gd.addLink(b)
+	gd.base[b] = gd.base[s]
+	gd.check[b] = gd.check[s]
+
+	for i, c := range ca {
+		// 新加入的状态
+		if i == len(ca)-1 {
+			gd.check[b+c] = b
+			gd.base[b+c] = 0
+			gd.addLink(b + c)
+		} else {
+			// 字符状态(s+c)迁移到(b+c)
+			newPos := b + c
+			oldPos := s + c
+			gd.base[newPos] = gd.base[oldPos]
+			gd.check[newPos] = b
+
+			// b+c下一跳的check值更新
+			if gd.base[oldPos] > 0 || gd.base[oldPos] != DAT_END_POS {
+				ca := gd.backtrace(oldPos)
+				for _, child := range ca {
+					gd.check[gd.base[oldPos]+child] = newPos
+				}
+			}
+
+			// 删除旧状态，增加新状态
+			gd.addLink(newPos)
+			gd.delLink(oldPos)
+		}
+	}
+}
+
 // 解除冲突 resolve conflicts
 //
-func (gd *GoDat) resolve(pat string, index int, s, c int) (err error) {
+func (gd *GoDat) resolve(s, c int) (err error) {
+	// 根据字符得到编码
+	ca := gd.backtrace(s)
+	ca = append(ca, c)
+
+	// find new base with ca
+	pos := gd.findNewBase(s, ca)
+	if pos < 0 {
+		return fmt.Errorf("find new base for %d, %d failed.", s, c)
+	}
+	// 重新定位
+	gd.reLocate(s, pos, ca)
 	return
 }
 
@@ -445,14 +527,7 @@ func (gd *GoDat) buildPattern(pat string) (err error) {
 			} else if gd.base[t] == 0 {
 				gd.base[t] = DAT_END_POS
 			}
-		} else {
-
 		}
-	}
-
-	//b = gd.findBase()
-	for ; i < patLen; i++ {
-
 	}
 
 	return
@@ -468,6 +543,6 @@ func (gd *GoDat) buildWithoutConflict() {
 
 // 匹配
 //
-func (gd *GoDat) Match(noodle string, opt ...int) bool {
+func (gd *GoDat) Match(noodle string) bool {
 	return false
 }
