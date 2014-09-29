@@ -295,38 +295,6 @@ func (gd *GoDat) Build() (err error) {
 	return
 }
 
-// 获取s位置的下一个字符r(编码为c)是否存在，存在返回下标，不存在返回-1
-func (gd *GoDat) nextState(s, c int) int {
-	// gd.check[0] should always be 0
-	if s == 0 {
-		return c
-	}
-
-	if gd.check[s] < 0 {
-		return -1
-	}
-
-	// 检查状态转移表
-	// c := gd.auxiliary[r]
-	t := -1*gd.base[s] + c
-	if gd.check[t] != s {
-		return -1
-	}
-
-	return t
-}
-
-func (gd *GoDat) findBase(s, c int) int {
-	if gd.base[s] < 0 {
-		return 1
-	}
-	return gd.base[s]
-}
-
-func (gd *GoDat) findIdle() int {
-	return 0
-}
-
 func (gd *GoDat) __find_pos(s, c int) int {
 	if gd.idles > 0 {
 		start := gd.check[0]
@@ -391,11 +359,6 @@ func (gd *GoDat) findPos(s, c int) (pos int, exist, conflict bool) {
 		conflict = true
 	}
 
-	return
-}
-
-// 以pat[index]开头的后续节点
-func (gd *GoDat) states(pat string, index int) (runes []rune) {
 	return
 }
 
