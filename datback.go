@@ -1,31 +1,43 @@
 package godat
 
 import (
-	//"strings"
+	"fmt"
 	"unicode/utf8"
 )
 
 // 回溯
 // 获取数组s位置的所有下一状态的runes
-func (gd *GoDat) backtrace(s int) []int {
+// endRune: 截至rune，0获取所有
+func (gd *GoDat) backtrace(s int, endRune rune) []int {
 	if gd.base[s] == DAT_END_POS {
 		return []int{}
 	}
+	tracePoint := s
 	res := ""
-	prevPos := gd.check[s]
-	for prevPos > 0 {
+	for {
+		prevPos := gd.check[s]
 		prevBase := gd.base[prevPos]
 		code := 0
 		if prevBase > 0 {
 			code = s - prevBase
 		} else if prevBase != DAT_END_POS {
 			code = s - (-1 * prevBase)
+		} else {
+			// prev base 不应该为DAT_END_POS，如果prev base==DAT_END_POS, 就不会产生冲突，也就不需要backtrace
+			panic("prevBase should be be DAT_END_POS")
 		}
 		if code <= 0 {
+			fmt.Printf("s=%d, prevPos=%d, prevBase=%d, code=%d\n", s, prevPos, prevBase, code)
 			panic("code value invalid")
 		}
 		r := gd.revAuxiliary[code]
 		res += string(r)
+
+		// gd.check[i] == 0，则到了字符串头部
+		if prevPos <= 0 {
+			break
+		}
+		s = prevPos
 	}
 	// 反转字符串
 	runes := []rune(res)
@@ -33,19 +45,20 @@ func (gd *GoDat) backtrace(s int) []int {
 		runes[i], runes[j] = runes[j], runes[i]
 	}
 
-	children := gd.prefixCount(string(runes))
-	ca := make([]int, len(runes))
+	children := gd.prefixCount(string(runes), endRune)
+	ca := make([]int, len(children))
 	for i, r := range children {
 		ca[i] = gd.auxiliary[r]
 	}
+	fmt.Println("backtrase: s=", tracePoint, "string=", string(runes), children, ca)
 	return ca
 }
 
 // 计算gd的patterns中以p开头的字符串的数量
-func (gd *GoDat) prefixCount(p string) (runes []rune) {
+func (gd *GoDat) prefixCount(p string, endRune rune) (runes []rune) {
 	patLen := len(gd.pats)
 	// 二分查找最接近的位置
-	pos := gd.binSearch(p) + 1
+	pos := gd.binSearch(p)
 	plen := len(p)
 	rm := make(map[rune]bool)
 	for pos < patLen && len(gd.pats[pos]) > plen && gd.pats[pos][0:plen] == p {
@@ -55,6 +68,9 @@ func (gd *GoDat) prefixCount(p string) (runes []rune) {
 		if _, ok := rm[r]; !ok {
 			rm[rune(r)] = true
 			runes = append(runes, rune(r))
+		}
+		if r == endRune {
+			break
 		}
 		pos++
 	}

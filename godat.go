@@ -16,8 +16,8 @@ const DAT_END_POS = -2147483648
 var (
 	minReserve      int     = 5
 	maxReserve      int     = 64
-	initArrayLen    int     = 1024
-	maxArrayLen     int     = 2 ^ 20
+	initArrayLen    int     = 32
+	maxArrayLen     int     = (1 << 20)
 	defReserveRatio float32 = 1.1
 )
 
@@ -45,6 +45,7 @@ type GoDat struct {
 
 // 创建双数组
 func CreateGoDat(pats []string, opts map[string]interface{}) (gd *GoDat, err error) {
+	gd = &GoDat{}
 	gd.SetOptions(opts)
 	if gd.ascii {
 		for _, pat := range pats {
@@ -64,12 +65,14 @@ func (gd *GoDat) dump() {
 	if gd.name != "" {
 		fmt.Println("dat " + gd.name + ":")
 	}
-	fmt.Println("options: nocase=%v ascii=%v\n", gd.nocase, gd.ascii)
+	fmt.Printf("options: nocase=%v ascii=%v\n", gd.nocase, gd.ascii)
 	if !gd.ascii {
 		fmt.Printf("dat auxiliary table: total = %d\n", len(gd.auxiliary))
 	}
 	fmt.Println("base  array:", gd.base)
 	fmt.Println("check array:", gd.check)
+	fmt.Println("aux:", gd.auxiliary)
+	fmt.Println("reverse aux:", gd.revAuxiliary)
 }
 
 // 增加一个模式
@@ -140,6 +143,7 @@ func (gd *GoDat) SetOptions(opts map[string]interface{}) {
 func (gd *GoDat) extend() (err error) {
 	orgLen := len(gd.base)
 	length := orgLen * 2
+	fmt.Printf("extend array from %d to %d\n", orgLen, length)
 	if length > gd.maxLen {
 		err = fmt.Errorf("Array cannot exceed dat's maxLen: %d", gd.maxLen)
 		return
@@ -166,17 +170,18 @@ func (gd *GoDat) extend() (err error) {
 		first := check[0]
 		last := -1 * base[first]
 
-		base[orgLen] = last
-		check[last] = orgLen
+		base[orgLen] = -last
+		check[last] = -orgLen
 
-		base[first] = length - 1
-		check[length-1] = first
+		base[first] = -length + 1
+		check[length-1] = -first
 	}
 
 	gd.base = base
 	gd.check = check
 	gd.idles += orgLen
 
+	fmt.Println("After extend:\nbase:", gd.base, "\ncheck:", gd.check)
 	return nil
 }
 
@@ -196,16 +201,6 @@ func (gd *GoDat) buildAux() {
 	}
 }
 
-func abs(i int) int {
-	if i == 0 {
-		return 0
-	}
-	if i < 0 {
-		return -i
-	}
-	return i
-}
-
 // 将base和check数组组成双向链表，借鉴小稳的C实现原理
 func (gd *GoDat) initLink() {
 	// 数组位置0预留
@@ -219,11 +214,12 @@ func (gd *GoDat) initLink() {
 		gd.check[i] = -(i + 1)
 	}
 	gd.base[1] = -(length - 1)
-	gd.check[length-1] = 1
+	gd.check[length-1] = -1
 
 	gd.idles = length - 1
 }
 
+// 节点用完后, 调用addLink使该节点变成idle
 func (gd *GoDat) addLink(s int) {
 	if gd.idles == 0 {
 		gd.check[0] = s
@@ -234,6 +230,12 @@ func (gd *GoDat) addLink(s int) {
 		// 找到s的下一个空节点位置
 		if s > t {
 			for t = -1 * gd.check[t]; t != gd.check[0] && t < s; {
+				if t < 0 || t > len(gd.check) {
+					fmt.Println("base:", gd.base)
+					fmt.Println("check:", gd.check)
+					fmt.Println("addLink: s=", s, "t=", t)
+					panic("invalid t")
+				}
 				t = -1 * gd.check[t]
 			}
 		}
@@ -252,6 +254,7 @@ func (gd *GoDat) addLink(s int) {
 	gd.idles++
 }
 
+// 使用节点前调用delLink删除节点
 func (gd *GoDat) delLink(s int) {
 	if gd.idles <= 0 {
 		return
@@ -260,13 +263,15 @@ func (gd *GoDat) delLink(s int) {
 	if gd.idles == 1 {
 		gd.check[0] = 0
 	} else {
-		gd.base[-1*gd.check[s]] = gd.base[s]
-		gd.check[-1*gd.base[s]] = gd.check[s]
-
 		// 是首节点的话, 修改check[0]指向下一个空闲的节点
 		if s == gd.check[0] {
 			gd.check[0] = -1 * gd.check[s]
 		}
+
+		fmt.Println("delLink:", s, gd.check[s])
+		fmt.Println("check:", gd.check)
+		gd.base[-1*gd.check[s]] = gd.base[s]
+		gd.check[-1*gd.base[s]] = gd.check[s]
 	}
 	gd.idles--
 }
@@ -285,11 +290,15 @@ func (gd *GoDat) Build() (err error) {
 
 	// 对pattern排序, 节省空间
 	sort.Sort(sort.StringSlice(gd.pats))
+	gd.dump()
 
 	for _, s := range gd.pats {
 		if err = gd.buildPattern(s); err != nil {
 			return
 		}
+
+		fmt.Println("After insert", s, ":\nbase array:", gd.base)
+		fmt.Println("check array:", gd.check)
 	}
 
 	return
@@ -299,13 +308,15 @@ func (gd *GoDat) __find_pos(s, c int) int {
 	if gd.idles > 0 {
 		start := gd.check[0]
 		pos := 0
-		for pos = start; pos <= c; {
+		min := len(gd.auxiliary)
+
+		for pos = start; pos <= min; {
 			pos = -1 * gd.check[pos]
 			if pos == start {
 				break
 			}
 		}
-		if pos > c {
+		if pos > min {
 			return pos
 		}
 	}
@@ -347,13 +358,21 @@ func (gd *GoDat) findPos(s, c int) (pos int, exist, conflict bool) {
 		}
 	}
 
+	for pos >= len(gd.base) {
+		if err := gd.extend(); err != nil {
+			pos = -1
+			fmt.Println("extend failed:", err)
+			return
+		}
+	}
+
 	if gd.check[pos] == s {
 		exist = true
 		return
 	}
 
 	if gd.check[pos] < 0 {
-		pos = gd.__find_pos(s, c)
+		//pos = gd.__find_pos(s, c)
 	} else {
 		// gd.check [pos]不可能=0
 		conflict = true
@@ -364,84 +383,108 @@ func (gd *GoDat) findPos(s, c int) (pos int, exist, conflict bool) {
 
 // find new base
 // return -1 if cannot found a free pos
-func (gd *GoDat) findNewBase(s int, ca []int) int {
+func (gd *GoDat) findNewBase(s int, ca []int) (int, int) {
+	if gd.idles == 0 {
+		if err := gd.extend(); err != nil {
+			return -1, 0
+		}
+	}
+
 	start := gd.check[0]
 	pos := start
 	arrLen := len(gd.base)
+	chs := len(gd.auxiliary)
 	for {
 		for ; -1*gd.check[pos] != start; pos = -1 * gd.check[pos] {
-			if pos < s {
+			// new base 的最小位置
+			if pos <= chs {
 				continue
 			}
 			found := true
-			for _, c := range ca {
-				if !(pos+c < arrLen && gd.check[pos+c] < 0) {
+			newbase := pos - ca[0]
+
+			// 0位置跳过
+			i := 1
+			for ; i < len(ca); i++ {
+				c := ca[i]
+				if !(newbase+c < arrLen && gd.check[newbase+c] < 0) {
 					found = false
 					break
 				}
 			}
 			if found {
-				return pos
+				return pos, newbase
+			}
+			if newbase+ca[i] >= arrLen {
+				break
 			}
 		}
 		if err := gd.extend(); err != nil {
-			return -1
+			return -1, 0
 		}
 		pos = arrLen
 	}
 
-	return -1
+	return -1, 0
 }
 
 // re-locate
 // s --> b
-func (gd *GoDat) reLocate(s, b int, ca []int) {
-	gd.addLink(b)
-	gd.base[b] = gd.base[s]
-	gd.check[b] = gd.check[s]
+// newbase = pos - ca[0]
+func (gd *GoDat) reLocate(s, pos, newbase int, ca []int) {
+	oldbase := gd.base[s]
+	fmt.Println("reLocate:", ca)
 
 	for i, c := range ca {
 		// 新加入的状态
 		if i == len(ca)-1 {
-			gd.check[b+c] = b
-			gd.base[b+c] = 0
-			gd.addLink(b + c)
+			fmt.Printf("i=%d, newbase=%d, c=%d\n", i, newbase, c)
+			gd.delLink(newbase + c)
+			gd.check[newbase+c] = s
+			gd.base[newbase+c] = 0
 		} else {
-			// 字符状态(s+c)迁移到(b+c)
-			newPos := b + c
-			oldPos := s + c
-			gd.base[newPos] = gd.base[oldPos]
-			gd.check[newPos] = b
+			// s的下一跳字符状态由oldPos迁移到newPos
+			newPos := newbase + c
+			oldPos := oldbase + c
 
-			// b+c下一跳的check值更新
-			if gd.base[oldPos] > 0 || gd.base[oldPos] != DAT_END_POS {
-				ca := gd.backtrace(oldPos)
+			gd.delLink(newPos)
+
+			gd.base[newPos] = gd.base[oldPos]
+			gd.check[newPos] = s
+
+			// 下一跳的check值更新
+			if gd.base[oldPos] != DAT_END_POS {
+				ca := gd.backtrace(oldPos, gd.revAuxiliary[c])
 				for _, child := range ca {
+					fmt.Printf("    set check [%d] to %d oldPos=%d child=%d\n",
+						gd.base[oldPos]+child, newPos, oldPos, child)
 					gd.check[gd.base[oldPos]+child] = newPos
 				}
 			}
 
-			// 删除旧状态，增加新状态
-			gd.addLink(newPos)
-			gd.delLink(oldPos)
+			// 旧状态节点变为空闲
+			gd.addLink(oldPos)
+			fmt.Printf("i=%d c=%d add idle pos %d, del idle pos %d\n\n", i, c, oldPos, newPos)
 		}
 	}
+	gd.base[s] = newbase
 }
 
 // 解除冲突 resolve conflicts
 //
 func (gd *GoDat) resolve(s, c int) (err error) {
 	// 根据字符得到编码
-	ca := gd.backtrace(s)
-	ca = append(ca, c)
+	ca := gd.backtrace(s, gd.revAuxiliary[c])
+	fmt.Printf("backtrace %d: %v\n", s, ca)
 
 	// find new base with ca
-	pos := gd.findNewBase(s, ca)
+	pos, newbase := gd.findNewBase(s, ca)
 	if pos < 0 {
 		return fmt.Errorf("find new base for %d, %d failed.", s, c)
 	}
+	fmt.Printf("find new base: %d for s=%d, c=%d\n", pos, s, c)
 	// 重新定位
-	gd.reLocate(s, pos, ca)
+	gd.reLocate(s, pos, newbase, ca)
 	return
 }
 
@@ -463,9 +506,11 @@ func (gd *GoDat) buildPattern(pat string) (err error) {
 
 		c = gd.auxiliary[r]
 		t, exist, conflict = gd.findPos(s, c)
+		fmt.Printf("insert character %v, index %d, s=%d, t=%d, exist=%v, conflict=%v\n", string(r), c, s, t, exist, conflict)
 
 		if t < 0 {
-			return fmt.Errorf("build pattern %s(%d) failed: array length=%d", pat, i, arrLen)
+			return fmt.Errorf("build pattern %s(%d) failed: origal array length=%d, now array length=%d",
+				pat, i, arrLen, len(gd.base))
 		}
 
 		if exist {
@@ -473,12 +518,15 @@ func (gd *GoDat) buildPattern(pat string) (err error) {
 		} else {
 			// exist==false的情况下, conflict有可能为true, 也有可能为false
 			if conflict {
-
+				err = gd.resolve(s, c)
+				if err != nil {
+					return
+				}
 			} else {
+				gd.delLink(t)
 				// base值由下一个确定
 				gd.base[t] = 0
 				gd.check[t] = s
-				gd.delLink(t)
 				s = t
 			}
 		}
