@@ -83,12 +83,19 @@ func (gd *GoDat) firstChar(endRune rune) []int {
 // 计算gd的patterns中以p开头的字符串的数量
 func (gd *GoDat) prefixCount(p string, endRune rune) (runes []rune) {
 	patLen := len(gd.pats)
-	// 二分查找最接近的位置
-	pos := gd.binSearch(p)
 	plen := len(p)
 	rm := make(map[rune]bool)
-	for pos < patLen && len(gd.pats[pos]) > plen && gd.pats[pos][0:plen] == p {
+
+	// 二分查找最接近的位置
+	for pos := gd.binSearch(p); pos < patLen; pos++ {
 		pat := gd.pats[pos]
+		if len(pat) <= plen {
+			continue
+		}
+		if pat[0:plen] != p {
+			break
+		}
+
 		r, _ := utf8.DecodeRuneInString(pat[plen:])
 
 		if _, ok := rm[r]; !ok {
@@ -98,7 +105,6 @@ func (gd *GoDat) prefixCount(p string, endRune rune) (runes []rune) {
 		if r == endRune {
 			break
 		}
-		pos++
 	}
 
 	return

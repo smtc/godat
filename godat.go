@@ -46,6 +46,7 @@ func CreateGoDat(pats []string, nocase bool) (gd *GoDat, err error) {
 }
 
 func (gd *GoDat) build() (err error) {
+	fmt.Println(gd.pats)
 	for _, s := range gd.pats {
 		if err = gd.buildPattern(s); err != nil {
 			return
@@ -316,7 +317,9 @@ func (gd *GoDat) findPos(s, c int) (pos int, exist, conflict bool) {
 		} else if gd.base[s] == DAT_END_POS {
 			// base[s] == DAT_END_POS 该位置是一个结束位置
 			// 为c找到位置
-			pos = gd.__find_pos(s, c)
+			if pos = gd.__find_pos(s, c); pos > 0 {
+				gd.base[s] = c - pos
+			}
 			return
 		} else {
 			// base[s] < 0
@@ -436,7 +439,7 @@ func (gd *GoDat) findNewBase(s int, ca []int) (int, int) {
 // newbase = pos - ca[0]
 func (gd *GoDat) reLocate(s, pos, newbase int, ca []int) {
 	oldbase := gd.base[s]
-	fmt.Printf("reLocate for s=%d, oldBase=%d, newBase=%d, pos=%d, ca=%v\n", s, oldbase, newbase, pos, ca)
+	fmt.Printf("!!!!!!!!reLocate for s=%d, oldBase=%d, newBase=%d, pos=%d, ca=%v\n", s, oldbase, newbase, pos, ca)
 
 	for i, c := range ca {
 		// 新加入的状态
@@ -449,6 +452,9 @@ func (gd *GoDat) reLocate(s, pos, newbase int, ca []int) {
 			// s的下一跳字符状态由oldPos迁移到newPos
 			newPos := newbase + c
 			oldPos := oldbase + c
+			if oldbase < 0 {
+				oldPos = -oldbase + c
+			}
 
 			gd.delLink(newPos)
 
@@ -456,12 +462,18 @@ func (gd *GoDat) reLocate(s, pos, newbase int, ca []int) {
 			gd.check[newPos] = s
 
 			// 下一跳的check值更新
+			fmt.Printf("  to be update pos %d, base=%d next children.\n", oldPos, gd.base[oldPos])
 			if gd.base[oldPos] != DAT_END_POS {
-				ca := gd.backtrace(oldPos, gd.revAuxiliary[c])
-				for _, child := range ca {
+				subca := gd.backtrace(oldPos, 0)
+				fmt.Printf("    sub char-array for old pos %d: %v\n", oldPos, subca)
+				for _, child := range subca {
 					fmt.Printf("    set check [%d] to %d oldPos=%d child=%d\n",
 						gd.base[oldPos]+child, newPos, oldPos, child)
-					gd.check[gd.base[oldPos]+child] = newPos
+					if gd.base[oldPos] > 0 {
+						gd.check[gd.base[oldPos]+child] = newPos
+					} else {
+						gd.check[-1*gd.base[oldPos]+child] = newPos
+					}
 				}
 			}
 
@@ -510,7 +522,7 @@ func (gd *GoDat) buildPattern(pat string) (err error) {
 
 		c = gd.auxiliary[r]
 		t, exist, conflict = gd.findPos(s, c)
-		fmt.Printf("insert character %v, index %d, s=%d, t=%d, exist=%v, conflict=%v\n", string(r), c, s, t, exist, conflict)
+		fmt.Printf("inserted: ch=%v, code=%d, s=%d[base=%d], t=%d, exist=%v, conflict=%v\n", string(r), c, s, gd.base[s], t, exist, conflict)
 
 		if t < 0 {
 			return fmt.Errorf("build pattern %s(%d) failed: origal array length=%d, now array length=%d",
@@ -562,12 +574,20 @@ func (gd *GoDat) Match(noodle string) bool {
 	res := true
 	s := 0
 	t := 0
+	fmt.Println("Match: " + noodle)
 	for _, ch := range noodle {
 		code := gd.auxiliary[ch]
-		if t, _ = gd.nextPos(s, code); t < 0 {
+		t, _ = gd.nextPos(s, code)
+		if t > 0 {
+			fmt.Printf("    ch=%s, code=%d, t=%d, base[%d]=%d, check[%d]=%d\n", string(ch), code, t, t, gd.base[t], t, gd.check[t])
+		} else {
+			fmt.Printf("    ch=%s, code=%d, t=%d\n", string(ch), code, t)
+		}
+		if t < 0 {
 			res = false
 			break
 		}
+		s = t
 	}
 	return res
 }
