@@ -12,11 +12,8 @@ import (
 const DAT_END_POS = -2147483648
 
 var (
-	minReserve      int     = 5
-	maxReserve      int     = 64
-	initArrayLen    int     = 32
-	maxArrayLen     int     = (1 << 20)
-	defReserveRatio float32 = 1.1
+	initArrayLen int = 32        // 数组初始长度
+	maxArrayLen  int = (1 << 20) // 数组最大长度
 )
 
 type GoDat struct {
@@ -43,7 +40,17 @@ func CreateGoDat(pats []string, nocase bool) (gd *GoDat, err error) {
 	gd.nocase = nocase
 	gd.maxLen = maxArrayLen
 
-	err = gd.Build()
+	gd.initialize()
+
+	for _, s := range gd.pats {
+		if err = gd.buildPattern(s); err != nil {
+			return
+		}
+		fmt.Println("+++++++After insert", s)
+		//fmt.Println("base array:", gd.base)
+		//fmt.Println("check array:", gd.check)
+	}
+
 	return
 }
 
@@ -54,7 +61,7 @@ func (gd *GoDat) dump() {
 	}
 	fmt.Printf("options: nocase=%v\n", gd.nocase)
 	fmt.Printf("array length = %d, idles = %d\n", len(gd.base), gd.idles)
-	if len(gd.base) <= 128 {
+	if len(gd.base) <= 1024 {
 		fmt.Println("base  array:", gd.base)
 		fmt.Println("check array:", gd.check)
 	}
@@ -235,7 +242,7 @@ func (gd *GoDat) sort() {
 }
 
 // 创建
-func (gd *GoDat) Build() (err error) {
+func (gd *GoDat) initialize() (err error) {
 	gd.base = make([]int, initArrayLen)
 	gd.check = make([]int, initArrayLen)
 	gd.auxiliary = make(map[rune]int)
@@ -243,20 +250,10 @@ func (gd *GoDat) Build() (err error) {
 
 	//将base和check组成双向链表
 	gd.initLink()
+	// 字符串排序
+	gd.sort()
 	// 创建字符辅助表
 	gd.buildAux()
-
-	gd.sort()
-	gd.dump()
-
-	for _, s := range gd.pats {
-		if err = gd.buildPattern(s); err != nil {
-			return
-		}
-
-		fmt.Println("+++++++After insert", s, ":\nbase array:", gd.base)
-		fmt.Println("check array:", gd.check)
-	}
 
 	return
 }
@@ -333,9 +330,7 @@ func (gd *GoDat) findPos(s, c int) (pos int, exist, conflict bool) {
 		return
 	}
 
-	if gd.check[pos] < 0 {
-		//pos = gd.__find_pos(s, c)
-	} else {
+	if gd.check[pos] > 0 {
 		// gd.check [pos]不可能=0
 		conflict = true
 	}
@@ -379,8 +374,11 @@ func (gd *GoDat) findNewBase(s int, ca []int) (int, int) {
 	start := gd.check[0]
 	pos := start
 	arrLen := len(gd.base)
-	chs := len(gd.auxiliary)
-	fmt.Printf("findNewBase: s=%d, ca=%v, pos=%d, chs=%d, base array len=%d\n", s, ca, pos, chs, len(gd.base))
+	//chs := len(gd.auxiliary)
+	chs := 1
+	if len(ca) > 0 {
+		chs = ca[len(ca)-1]
+	}
 	for ; ; pos = -1 * gd.check[pos] {
 		if -1*gd.check[pos] == start {
 			if err := gd.extend(); err != nil {
@@ -543,6 +541,7 @@ func (gd *GoDat) buildPattern(pat string) (err error) {
 
 // 无冲突版本
 // 实现原理:
+//   0、排序
 //   1、按列插入
 //   2、加入链表中，如果一个字符串已经全部加入到dat中，把这个字符串删除
 func (gd *GoDat) buildWithoutConflict() {
