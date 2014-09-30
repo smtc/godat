@@ -18,6 +18,7 @@ func (gd *GoDat) backtrace(s int, endRune rune) []int {
 	}
 
 	tracePoint := s
+	_ = tracePoint
 	res := ""
 	for {
 		prevPos := gd.check[s]
@@ -32,7 +33,8 @@ func (gd *GoDat) backtrace(s int, endRune rune) []int {
 			panic("prevBase should be be DAT_END_POS")
 		}
 		if code <= 0 {
-			fmt.Printf("s=%d, prevPos=%d, prevBase=%d, code=%d\n", s, prevPos, prevBase, code)
+			fmt.Printf("s=%d, prevPos=%d, prevBase=%d, code=%d, res=%s\n", s, prevPos, prevBase, code, res)
+			fmt.Println(gd.base, "\n", gd.check)
 			panic("code value invalid")
 		}
 		r := gd.revAuxiliary[code]
@@ -55,7 +57,7 @@ func (gd *GoDat) backtrace(s int, endRune rune) []int {
 	for i, r := range children {
 		ca[i] = gd.auxiliary[r]
 	}
-	fmt.Println("backtrase: s=", tracePoint, "string=", string(runes), children, ca)
+	//fmt.Println("backtrase: s=", tracePoint, "string=", string(runes), children, ca)
 	return ca
 }
 
