@@ -69,10 +69,14 @@ func (gd *GoDat) dump() {
 	if !gd.ascii {
 		fmt.Printf("dat auxiliary table: total = %d\n", len(gd.auxiliary))
 	}
-	fmt.Println("base  array:", gd.base)
-	fmt.Println("check array:", gd.check)
+	fmt.Println("array length: ", len(gd.base))
+	if len(gd.base) <= 128 {
+		fmt.Println("base  array:", gd.base)
+		fmt.Println("check array:", gd.check)
+	}
 	fmt.Println("aux:", gd.auxiliary)
 	fmt.Println("reverse aux:", gd.revAuxiliary)
+	fmt.Println("patterns:", gd.pats)
 }
 
 // 增加一个模式
@@ -177,11 +181,13 @@ func (gd *GoDat) extend() (err error) {
 		check[length-1] = -first
 	}
 
+	//fmt.Println("Before extend:\nbase:", gd.base, "\ncheck:", gd.check)
+
 	gd.base = base
 	gd.check = check
 	gd.idles += orgLen
 
-	fmt.Println("After extend:\nbase:", gd.base, "\ncheck:", gd.check)
+	//fmt.Println("After extend:\nbase:", gd.base, "\ncheck:", gd.check)
 	return nil
 }
 
@@ -268,10 +274,13 @@ func (gd *GoDat) delLink(s int) {
 			gd.check[0] = -1 * gd.check[s]
 		}
 
-		fmt.Println("delLink:", s, gd.check[s])
-		fmt.Println("check:", gd.check)
+		//fmt.Println("delLink:", s, gd.base[s], gd.check[s])
+		//fmt.Println("before delLink: base:", gd.base)
+		//fmt.Println("before delLink: check:", gd.check)
 		gd.base[-1*gd.check[s]] = gd.base[s]
 		gd.check[-1*gd.base[s]] = gd.check[s]
+		//fmt.Println("after delLink: base:", gd.base)
+		//fmt.Println("after delLink: check:", gd.check)
 	}
 	gd.idles--
 }
@@ -297,7 +306,7 @@ func (gd *GoDat) Build() (err error) {
 			return
 		}
 
-		fmt.Println("After insert", s, ":\nbase array:", gd.base)
+		fmt.Println("+++++++After insert", s, ":\nbase array:", gd.base)
 		fmt.Println("check array:", gd.check)
 	}
 
@@ -317,9 +326,11 @@ func (gd *GoDat) __find_pos(s, c int) int {
 			}
 		}
 		if pos > min {
+			fmt.Printf("__find_pos: s=%d c=%d pos=%d\n", s, c, pos)
 			return pos
 		}
 	}
+	fmt.Printf("__find_pos: s=%d c=%d, extend array\n", s, c)
 	if err := gd.extend(); err != nil {
 		return -1
 	}
@@ -332,8 +343,9 @@ func (gd *GoDat) __find_pos(s, c int) int {
 //      exist: pos位置是否有字符c
 //      conflict: 是否冲突
 func (gd *GoDat) findPos(s, c int) (pos int, exist, conflict bool) {
+	fmt.Printf("=========findPos: s=%d c=%d(%s) base[s]=%d check[s]=%d\n", s, c, string(gd.revAuxiliary[c]), gd.base[s], gd.check[s])
 	if s == 0 {
-		pos = c
+		pos = gd.base[0] + c
 	} else {
 		if gd.base[s] == 0 {
 			// base[s] == 0 该位置是一个中间状态，其base值由找到的位置和c来决定
@@ -394,37 +406,48 @@ func (gd *GoDat) findNewBase(s int, ca []int) (int, int) {
 	pos := start
 	arrLen := len(gd.base)
 	chs := len(gd.auxiliary)
-	for {
-		for ; -1*gd.check[pos] != start; pos = -1 * gd.check[pos] {
-			// new base 的最小位置
-			if pos <= chs {
-				continue
+	fmt.Printf("findNewBase: s=%d, ca=%v, pos=%d, chs=%d, base array len=%d\n", s, ca, pos, chs, len(gd.base))
+	for ; ; pos = -1 * gd.check[pos] {
+		if -1*gd.check[pos] == start {
+			if err := gd.extend(); err != nil {
+				return -1, 0
 			}
-			found := true
-			newbase := pos - ca[0]
+		}
+		fmt.Printf("find new base loop: %d\n", pos)
+		// new base 的最小位置
+		if pos <= chs {
+			continue
+		}
+		found := true
+		newbase := pos - ca[0]
 
-			// 0位置跳过
-			i := 1
-			for ; i < len(ca); i++ {
-				c := ca[i]
-				if !(newbase+c < arrLen && gd.check[newbase+c] < 0) {
-					found = false
-					break
+		// 0位置跳过
+		i := 1
+		for ; i < len(ca); i++ {
+			c := ca[i]
+			if (newbase + c) >= arrLen {
+				if err := gd.extend(); err != nil {
+					fmt.Printf("findNewBase failed: s=%d, ca=%v, pos=%d, base array len=%d newbase=%d\nbase: %v\ncheck: %v\n",
+						s, ca, pos, len(gd.base), newbase, gd.base, gd.check)
+					panic("findNewBase failed inner")
+					return -1, 0
 				}
+				arrLen = len(gd.base)
 			}
-			if found {
-				return pos, newbase
-			}
-			if newbase+ca[i] >= arrLen {
+			if gd.check[newbase+c] >= 0 {
+				found = false
+				fmt.Println("breaked!")
 				break
 			}
 		}
-		if err := gd.extend(); err != nil {
-			return -1, 0
+		if found {
+			return pos, newbase
 		}
-		pos = arrLen
 	}
 
+	fmt.Printf("findNewBase failed: s=%d, ca=%v, pos=%d, base array len=%d\nbase: %v\ncheck: %v\n",
+		s, ca, pos, len(gd.base), gd.base, gd.check)
+	panic("findNewBase failed")
 	return -1, 0
 }
 
@@ -433,7 +456,7 @@ func (gd *GoDat) findNewBase(s int, ca []int) (int, int) {
 // newbase = pos - ca[0]
 func (gd *GoDat) reLocate(s, pos, newbase int, ca []int) {
 	oldbase := gd.base[s]
-	fmt.Println("reLocate:", ca)
+	fmt.Printf("reLocate for s=%d, oldBase=%d, newBase=%d, pos=%d, ca=%v\n", s, oldbase, newbase, pos, ca)
 
 	for i, c := range ca {
 		// 新加入的状态
@@ -472,7 +495,7 @@ func (gd *GoDat) reLocate(s, pos, newbase int, ca []int) {
 
 // 解除冲突 resolve conflicts
 //
-func (gd *GoDat) resolve(s, c int) (err error) {
+func (gd *GoDat) resolve(s, c int) (newPos int, err error) {
 	// 根据字符得到编码
 	ca := gd.backtrace(s, gd.revAuxiliary[c])
 	fmt.Printf("backtrace %d: %v\n", s, ca)
@@ -480,11 +503,12 @@ func (gd *GoDat) resolve(s, c int) (err error) {
 	// find new base with ca
 	pos, newbase := gd.findNewBase(s, ca)
 	if pos < 0 {
-		return fmt.Errorf("find new base for %d, %d failed.", s, c)
+		return -1, fmt.Errorf("find new base for %d, %d failed.", s, c)
 	}
 	fmt.Printf("find new base: %d for s=%d, c=%d\n", pos, s, c)
 	// 重新定位
 	gd.reLocate(s, pos, newbase, ca)
+	newPos = newbase + c
 	return
 }
 
@@ -513,12 +537,11 @@ func (gd *GoDat) buildPattern(pat string) (err error) {
 				pat, i, arrLen, len(gd.base))
 		}
 
-		if exist {
-			s = t
-		} else {
+		if exist == false {
 			// exist==false的情况下, conflict有可能为true, 也有可能为false
 			if conflict {
-				err = gd.resolve(s, c)
+				// resolve已经把c加入到数组中, 且base设为0
+				t, err = gd.resolve(s, c)
 				if err != nil {
 					return
 				}
@@ -527,9 +550,9 @@ func (gd *GoDat) buildPattern(pat string) (err error) {
 				// base值由下一个确定
 				gd.base[t] = 0
 				gd.check[t] = s
-				s = t
 			}
 		}
+		s = t
 
 		if i == patLen-1 {
 			// r为最后一个字符

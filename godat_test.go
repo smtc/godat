@@ -8,7 +8,9 @@ import (
 
 func TestBuildDat(t *testing.T) {
 	gd, err := CreateGoDat([]string{"abcd", "c", "aa", "ad", "djkafiew", "aceiw", "bbbbb", "bbbbbbae", "asd", "aglmnqioew",
-		"http://www.sina.cn", "alpha"}, nil)
+		"http://www.sina.cn", "alpha", "aaa", "zzbc", "fals", "hi!", "ab", "cc", "ca", "sets",
+		"abcd", "wow", "baa", "ma", "mm",
+		"how", "bcefd", "apple", "google", "ms", "tencent", "baidu", "axon"}, nil)
 	if err != nil {
 		t.Fatal("create dat failed:", err)
 	}
