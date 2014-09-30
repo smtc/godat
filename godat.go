@@ -38,10 +38,14 @@ type GoDat struct {
 func CreateGoDat(pats []string, nocase bool) (gd *GoDat, err error) {
 	gd = &GoDat{pats: pats}
 	gd.nocase = nocase
-	gd.maxLen = maxArrayLen
 
 	gd.initialize()
+	gd.build()
 
+	return
+}
+
+func (gd *GoDat) build() (err error) {
 	for _, s := range gd.pats {
 		if err = gd.buildPattern(s); err != nil {
 			return
@@ -50,7 +54,6 @@ func CreateGoDat(pats []string, nocase bool) (gd *GoDat, err error) {
 		//fmt.Println("base array:", gd.base)
 		//fmt.Println("check array:", gd.check)
 	}
-
 	return
 }
 
@@ -62,10 +65,14 @@ func (gd *GoDat) dump() {
 	fmt.Printf("options: nocase=%v\n", gd.nocase)
 	fmt.Printf("array length = %d, idles = %d\n", len(gd.base), gd.idles)
 	if len(gd.base) <= 1024 {
-		fmt.Println("base  array:", gd.base)
-		fmt.Println("check array:", gd.check)
+		for i := 0; i < len(gd.base); i++ {
+			fmt.Printf("GoDat array index %d: %d    %d\n", i, gd.base[i], gd.check[i])
+		}
 	}
-	fmt.Println("aux:", gd.auxiliary)
+	fmt.Println("aux:")
+	for k, v := range gd.auxiliary {
+		fmt.Printf("    %s(%v): %d\n", string(k), k, v)
+	}
 	fmt.Println("reverse aux:", gd.revAuxiliary)
 	fmt.Println("patterns:", gd.pats)
 }
@@ -243,6 +250,8 @@ func (gd *GoDat) sort() {
 
 // 创建
 func (gd *GoDat) initialize() (err error) {
+	gd.maxLen = maxArrayLen
+
 	gd.base = make([]int, initArrayLen)
 	gd.check = make([]int, initArrayLen)
 	gd.auxiliary = make(map[rune]int)
@@ -290,7 +299,6 @@ func (gd *GoDat) __find_pos(s, c int) int {
 //      exist: pos位置是否有字符c
 //      conflict: 是否冲突
 func (gd *GoDat) findPos(s, c int) (pos int, exist, conflict bool) {
-	fmt.Printf("=========findPos: s=%d c=%d(%s) base[s]=%d check[s]=%d\n", s, c, string(gd.revAuxiliary[c]), gd.base[s], gd.check[s])
 	if s == 0 {
 		pos = gd.base[0] + c
 	} else {

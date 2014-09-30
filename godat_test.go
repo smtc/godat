@@ -1,8 +1,12 @@
 package godat
 
 import (
-	"fmt"
+	"bufio"
+	//"fmt"
+	"io"
+	"os"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -22,13 +26,30 @@ func TestBuildDat(t *testing.T) {
 		}
 	*/
 	for _, pat := range gd.pats {
-		if gd.Match(pat) == true {
-			fmt.Printf("Found pattern %s\n", pat)
+		if gd.Match(pat) == false {
+			t.Fatal("match should be true " + pat)
 		}
 		if gd.Match(pat+"!") == true {
-			fmt.Printf("Found pattern %s\n", pat)
+			t.Fatal("match should be false")
 		}
 	}
+}
+
+func testBuildDict(t *testing.T) {
+	gd := GoDat{}
+	f, err := os.Open("./dictionary.txt")
+	if err != nil {
+		t.Fatal("open dictionary file failed!\n")
+	}
+	rd := bufio.NewReader(f)
+	for line, err := rd.ReadString(byte('\n')); err == nil || err != io.EOF; line, err = rd.ReadString(byte('\n')) {
+		segs := strings.Split(line, " ")
+		if len(segs) != 3 {
+			continue
+		}
+		gd.add(segs[0])
+	}
+	gd.build()
 }
 
 func testExtend(t *testing.T) {
