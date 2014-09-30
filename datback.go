@@ -128,6 +128,5 @@ func (gd *GoDat) binSearch(p string) int {
 		//如果每次循环都判断一下是否相等，将耗费时间
 	}
 
-	//return -1
 	return right
 }

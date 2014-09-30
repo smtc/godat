@@ -25,6 +25,9 @@ func TestBuildDat(t *testing.T) {
 		if gd.Match(pat) == true {
 			fmt.Printf("Found pattern %s\n", pat)
 		}
+		if gd.Match(pat+"!") == true {
+			fmt.Printf("Found pattern %s\n", pat)
+		}
 	}
 }
 
