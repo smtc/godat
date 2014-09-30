@@ -9,9 +9,14 @@ import (
 // 获取数组s位置的所有下一状态的runes
 // endRune: 截至rune，0获取所有
 func (gd *GoDat) backtrace(s int, endRune rune) []int {
+	if s == 0 {
+		return gd.firstChar(endRune)
+	}
+
 	if gd.base[s] == DAT_END_POS {
 		return []int{}
 	}
+
 	tracePoint := s
 	res := ""
 	for {
@@ -51,6 +56,27 @@ func (gd *GoDat) backtrace(s int, endRune rune) []int {
 		ca[i] = gd.auxiliary[r]
 	}
 	fmt.Println("backtrase: s=", tracePoint, "string=", string(runes), children, ca)
+	return ca
+}
+
+// 获取所有字符串的首字符
+func (gd *GoDat) firstChar(endRune rune) []int {
+	rm := make(map[rune]bool)
+	runes := make([]rune, 0)
+	for _, pat := range gd.pats {
+		r, _ := utf8.DecodeRuneInString(pat[0:])
+		if _, ok := rm[r]; !ok {
+			rm[r] = true
+			runes = append(runes, r)
+		}
+		if r == endRune {
+			break
+		}
+	}
+	ca := make([]int, len(runes))
+	for i, r := range runes {
+		ca[i] = gd.auxiliary[r]
+	}
 	return ca
 }
 

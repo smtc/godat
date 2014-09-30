@@ -2,9 +2,7 @@ package godat
 
 import (
 	"fmt"
-	"log"
 	"sort"
-	"strings"
 	"unicode"
 )
 
@@ -31,31 +29,20 @@ type GoDat struct {
 	revAuxiliary map[int]rune
 	// patterns
 	pats []string
-	// 下一个将要使用的位置
-	nextPos int
-	idles   int
+	// 空闲的位置
+	idles int
+	// 数组最大长度
+	maxLen int
 	// options
-	nocase    bool // 区分大小写
-	ascii     bool // 仅处理ascii
-	minResv   int
-	maxResv   int
-	maxLen    int
-	resvRatio float32
+	nocase bool // 区分大小写
 }
 
 // 创建双数组
-func CreateGoDat(pats []string, opts map[string]interface{}) (gd *GoDat, err error) {
-	gd = &GoDat{}
-	gd.SetOptions(opts)
-	if gd.ascii {
-		for _, pat := range pats {
-			if err = gd.add(pat); err != nil {
-				log.Printf("CreateGoDat: pattern %s is invalid, maybe it contains non-ascii characters, ignored.\n", pat)
-			}
-		}
-	} else {
-		gd.pats = pats
-	}
+func CreateGoDat(pats []string, nocase bool) (gd *GoDat, err error) {
+	gd = &GoDat{pats: pats}
+	gd.nocase = nocase
+	gd.maxLen = maxArrayLen
+
 	err = gd.Build()
 	return
 }
@@ -65,11 +52,8 @@ func (gd *GoDat) dump() {
 	if gd.name != "" {
 		fmt.Println("dat " + gd.name + ":")
 	}
-	fmt.Printf("options: nocase=%v ascii=%v\n", gd.nocase, gd.ascii)
-	if !gd.ascii {
-		fmt.Printf("dat auxiliary table: total = %d\n", len(gd.auxiliary))
-	}
-	fmt.Println("array length: ", len(gd.base))
+	fmt.Printf("options: nocase=%v\n", gd.nocase)
+	fmt.Printf("array length = %d, idles = %d\n", len(gd.base), gd.idles)
 	if len(gd.base) <= 128 {
 		fmt.Println("base  array:", gd.base)
 		fmt.Println("check array:", gd.check)
@@ -81,66 +65,8 @@ func (gd *GoDat) dump() {
 
 // 增加一个模式
 func (gd *GoDat) add(pat string) error {
-	if gd.ascii {
-		// 检查pat是否全为ascii字符
-	}
 	gd.pats = append(gd.pats, pat)
 	return nil
-}
-
-func (gd *GoDat) SetOptions(opts map[string]interface{}) {
-	var (
-		i     int
-		f     float32
-		b, ok bool
-	)
-
-	gd.minResv = minReserve
-	gd.maxResv = maxReserve
-	gd.maxLen = maxArrayLen
-	gd.resvRatio = defReserveRatio
-
-	for key, v := range opts {
-		k := strings.ToLower(key)
-		switch k {
-		case "nocase":
-			if b, ok = v.(bool); ok {
-				gd.nocase = b
-			} else {
-				log.Println("SetOptions: option nocase should be type bool")
-			}
-		case "ascii":
-			if b, ok = v.(bool); ok {
-				gd.ascii = b
-			} else {
-				log.Println("SetOptions: option ascii should be type bool")
-			}
-		case "minResv":
-			if i, ok = v.(int); ok {
-				gd.minResv = i
-			} else {
-				log.Println("SetOptions: option minResv should be type int")
-			}
-		case "maxResv":
-			if i, ok = v.(int); ok {
-				gd.minResv = i
-			} else {
-				log.Println("SetOptions: option maxResv should be type int")
-			}
-		case "resvRatio":
-			if f, ok = v.(float32); ok {
-				gd.resvRatio = f
-			} else {
-				log.Println("SetOptions: option resvRatio should be type float32")
-			}
-		default:
-			log.Println("SetOptions: ignore unknown options " + key)
-		}
-	}
-	// 设置默认选项nocase为true
-	if opts["nocase"] == nil {
-		gd.nocase = true
-	}
 }
 
 // 扩大数组长度
@@ -285,6 +211,29 @@ func (gd *GoDat) delLink(s int) {
 	gd.idles--
 }
 
+func (gd *GoDat) sort() {
+	if len(gd.pats) == 0 {
+		return
+	}
+
+	// 对pattern排序, 节省空间
+	sort.Sort(sort.StringSlice(gd.pats))
+
+	// 过滤空字符串
+	pats := gd.pats
+	for i, pat := range pats {
+		if pat == "" {
+			if i == len(pats)-1 {
+				gd.pats = []string{}
+				return
+			}
+			gd.pats = pats[i+1:]
+		} else {
+			break
+		}
+	}
+}
+
 // 创建
 func (gd *GoDat) Build() (err error) {
 	gd.base = make([]int, initArrayLen)
@@ -297,8 +246,7 @@ func (gd *GoDat) Build() (err error) {
 	// 创建字符辅助表
 	gd.buildAux()
 
-	// 对pattern排序, 节省空间
-	sort.Sort(sort.StringSlice(gd.pats))
+	gd.sort()
 	gd.dump()
 
 	for _, s := range gd.pats {
@@ -318,14 +266,15 @@ func (gd *GoDat) __find_pos(s, c int) int {
 		start := gd.check[0]
 		pos := 0
 		min := len(gd.auxiliary)
+		_ = min
 
-		for pos = start; pos <= min; {
+		for pos = start; pos <= c; {
 			pos = -1 * gd.check[pos]
 			if pos == start {
 				break
 			}
 		}
-		if pos > min {
+		if pos > c {
 			fmt.Printf("__find_pos: s=%d c=%d pos=%d\n", s, c, pos)
 			return pos
 		}
@@ -334,6 +283,7 @@ func (gd *GoDat) __find_pos(s, c int) int {
 	if err := gd.extend(); err != nil {
 		return -1
 	}
+
 	return len(gd.base) / 2
 }
 
@@ -390,6 +340,30 @@ func (gd *GoDat) findPos(s, c int) (pos int, exist, conflict bool) {
 		conflict = true
 	}
 
+	return
+}
+
+//
+func (gd *GoDat) nextPos(s, code int) (t int, isEnd bool) {
+
+	if gd.base[s] == DAT_END_POS {
+		// 结束状态
+		return -1, true
+	}
+	if s == 0 {
+		t = gd.base[0] + code
+	} else {
+		if gd.base[s] > 0 {
+			t = gd.base[s] + code
+		} else {
+			t = -1*gd.base[s] + code
+			isEnd = true
+		}
+	}
+
+	if gd.check[t] != s {
+		t = -1
+	}
 	return
 }
 
@@ -578,5 +552,15 @@ func (gd *GoDat) buildWithoutConflict() {
 // 匹配
 //
 func (gd *GoDat) Match(noodle string) bool {
-	return false
+	res := true
+	s := 0
+	t := 0
+	for _, ch := range noodle {
+		code := gd.auxiliary[ch]
+		if t, _ = gd.nextPos(s, code); t < 0 {
+			res = false
+			break
+		}
+	}
+	return res
 }
