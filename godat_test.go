@@ -2,7 +2,7 @@ package godat
 
 import (
 	"bufio"
-	//"fmt"
+	"fmt"
 	"io"
 	"os"
 	"sort"
@@ -75,7 +75,7 @@ func TestBuildDat(t *testing.T) {
 	}
 }
 
-func TestBuildDict(t *testing.T) {
+func testBuildDict(t *testing.T) {
 	gd := GoDat{}
 	f, err := os.Open("./dictionary.txt")
 	if err != nil {
@@ -92,6 +92,16 @@ func TestBuildDict(t *testing.T) {
 	gd.initialize()
 	gd.dump()
 	gd.build()
+
+	for _, pat := range gd.pats {
+		if gd.Match(pat) == false {
+			//t.Fatal("match should be true:" + pat)
+			fmt.Println(pat, "should be match")
+		}
+		//if gd.Match(pat+"!") == true {
+		//	t.Fatal("match should be false")
+		//}
+	}
 }
 
 func testExtend(t *testing.T) {
