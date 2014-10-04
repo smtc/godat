@@ -11,7 +11,8 @@ import (
 )
 
 func TestNoConflict(t *testing.T) {
-	pats := []string{"aea", "aeb", "c", "d", "γ射線",
+	pats := []string{"aea", "aeb", "d",
+		"γ射線",
 		"γ射线",
 		"䰾",
 		"䲁",
@@ -24,7 +25,7 @@ func TestNoConflict(t *testing.T) {
 		"bbbbb",
 		"c",
 		"bbbbbbae",
-		"http://www.sina.cn", "alpha", "aaa", "zzbc", "fals", "hi!", "ab", "cc", "ca", "sets",
+		"http://www.sina.cn", "alpha", "zzbc", "fals", "hi!", "ab", "cc", "ca", "sets",
 		"wow", "baa", "ma", "mm",
 		"how", "bcefd", "apple", "google", "ms", "tencent", "baidu", "axon",
 		"全國假日旅遊部際協調會議辦公室", "中华人民共和国全国人民代表大会",
@@ -38,10 +39,10 @@ func TestNoConflict(t *testing.T) {
 		"香港特别行政区基本法起草委员会", "八千一百三十七万七千二百三十六口",
 		"八千一百三十七萬七千二百三十六口", "第九屆全國人民代表大會常務委員會",
 		"第九届全国人民代表大会常务委员会", "劳动和社会保障部职业技能鉴定中",
-		"1号店",
-		"1號店",
-		"4S店",
-		"4s店",
+		//"1号店",
+		//"1號店",
+		//"4S店",
+		//"4s店",
 		"AA制",
 		"AB型",
 		"AT&T",
@@ -132,7 +133,7 @@ func testBuildDat(t *testing.T) {
 	}
 }
 
-func testBuildDict(t *testing.T) {
+func TestBuildDict(t *testing.T) {
 	gd := GoDat{}
 	f, err := os.Open("./dictionary.txt")
 	if err != nil {

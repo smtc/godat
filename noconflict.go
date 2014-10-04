@@ -9,19 +9,30 @@ import (
 // 无冲突build双数组
 type Words []rune
 
+//
+// 去重
 func (gd *GoDat) toWords() []Words {
+	var (
+		cnt int
+		m   = make(map[string]bool)
+	)
 	ws := make([]Words, len(gd.pats))
-	for i, pat := range gd.pats {
+	for _, pat := range gd.pats {
+		if _, ok := m[pat]; ok {
+			continue
+		}
+		m[pat] = true
 		ru := make(Words, 0)
 		for len(pat) > 0 {
 			r, size := utf8.DecodeRuneInString(pat)
 			pat = pat[size:]
 			ru = append(ru, r)
 		}
-		ws[i] = ru
+		ws[cnt] = ru
+		cnt++
 	}
 
-	return ws
+	return ws[0:cnt]
 }
 
 func (gd *GoDat) ncBuild(ws []Words) error {
@@ -42,9 +53,9 @@ func (gd *GoDat) ncBuild(ws []Words) error {
 
 	fmt.Println(len(gd.pats))
 	//fmt.Println(gd.pats)
-	for i, pat := range gd.pats {
-		fmt.Println(i, pat)
-	}
+	//for i, pat := range gd.pats {
+	//	fmt.Println(i, pat)
+	//}
 	// 首字符
 	codes = gd.prefixRune(ws, -1, 0)
 	stacks = append(stacks, buildStack{len(codes), 0, 0})
@@ -60,11 +71,12 @@ func (gd *GoDat) ncBuild(ws []Words) error {
 		} else {
 			stacks[len(stacks)-1].endRow--
 		}
-		fmt.Printf("cursor: %d string to be inserted: %v stack: %v stacks: %v\n", cursor, w, stack, stacks)
+		//fmt.Printf("cursor: %d string to be inserted: %v stack: %v stacks: %v base[stack.s]: %d\n", cursor, w, stack, stacks, gd.base[stack.s])
 		w = w[stack.column:]
 		if gd.base[stack.s] < 0 {
 			s = -1*gd.base[stack.s] + gd.auxiliary[w[0]]
 		} else {
+			//println("cursor:", cursor, "w length:", len(w), stack.column, len(ws[cursor]), string(ws[cursor]))
 			s = gd.base[stack.s] + gd.auxiliary[w[0]]
 		}
 		if s >= len(gd.base) {
@@ -77,7 +89,7 @@ func (gd *GoDat) ncBuild(ws []Words) error {
 			// codes 不包括r
 			codes = gd.prefixRune(ws[cursor:], i+stack.column, r)
 
-			fmt.Printf("    i=%d w=%v s=%d t=%d r=%v(%d) codes=%v\n", i, w, s, t, r, gd.auxiliary[r], codes)
+			//fmt.Printf("    i=%d w=%v s=%d t=%d r=%v(%d) codes=%v\n", i, w, s, t, r, gd.auxiliary[r], codes)
 			if i == len(w)-1 {
 				// 所有模式中，无与当前相同的前缀
 				// 最后一个字符
@@ -85,7 +97,15 @@ func (gd *GoDat) ncBuild(ws []Words) error {
 					gd.base[s] = DAT_END_POS
 				} else {
 					gd.base[s] = -gd.base[s]
+					stacks = append(stacks, buildStack{len(codes), stack.column + i + 1, s})
+					if err = gd.insertCodes(s, codes); err != nil {
+						return err
+					}
 				}
+
+				//fmt.Printf("    i=%d s=%d t=%d r=%v  codes=%v stack.column=%d\n", i, s, t, r, codes, stack.column)
+				//fmt.Println("   ", gd.base, "\n   ", gd.check)
+				//fmt.Println("    stacks:", len(stacks), stacks)
 				break
 			} else {
 				allcodes := codes
@@ -104,9 +124,9 @@ func (gd *GoDat) ncBuild(ws []Words) error {
 				t = gd.base[s] + nextChar //gd.auxiliary[r]
 			}
 
-			fmt.Printf("    i=%d s=%d t=%d r=%v  codes=%v stack.column=%d\n", i, s, t, r, codes, stack.column)
+			//fmt.Printf("    i=%d s=%d t=%d r=%v  codes=%v stack.column=%d\n", i, s, t, r, codes, stack.column)
 			//fmt.Println("   ", gd.base, "\n   ", gd.check)
-			fmt.Println("    stacks:", len(stacks), stacks)
+			//fmt.Println("    stacks:", len(stacks), stacks)
 
 			s = t
 		}
@@ -118,6 +138,17 @@ func (gd *GoDat) ncBuild(ws []Words) error {
 
 	}
 	return nil
+}
+
+// 比较两个slice中的每一个元素是否都相同
+// 长度相同
+func equalSlic(src, dst Words) bool {
+	for i, _ := range src {
+		if src[i] != dst[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // ws已经排过序，且ws的第一条记录应该是符合ws[startPos]==r的
@@ -145,9 +176,13 @@ func (gd *GoDat) prefixRune(ws []Words, startPos int, r rune) []int {
 	}
 	//fmt.Printf("    +++prefixRune: ws=%v startPos=%v nextChar=%v r=%v\n", ws, startPos, nextChar, r)
 
-	for i = 1; i < len(ws); i++ {
+	prefix := ws[0]
+	if startPos != -1 {
+		i = 1
+	}
+	for ; i < len(ws); i++ {
 		w = ws[i]
-		if len(w) < startPos+1 || (startPos >= 0 && w[startPos] != r) {
+		if len(w) < startPos+1 || (startPos >= 0 && equalSlic(w[0:startPos+1], prefix[0:startPos+1]) == false) {
 			break
 		}
 		if len(w) > startPos+1 {
@@ -217,9 +252,10 @@ func (gd *GoDat) insertCodes(s int, codes []int) error {
 	}
 
 	// found
-	fmt.Println("    ----base:", base, ", codes:", codes, len(gd.base))
+	//fmt.Println("    ----base:", base, ", s:", s, ", codes:", codes, len(gd.base))
 	gd.base[s] = base
 	for _, c := range codes {
+		//fmt.Println("    --------delLink:", base+c, gd.base[base+c], gd.check[base+c])
 		gd.delLink(base + c)
 		gd.check[base+c] = s
 		gd.base[base+c] = 0
