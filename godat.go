@@ -1,16 +1,12 @@
 package godat
 
-import (
-	"container/list"
-)
-
 // double array trie algorithm implement in golang
 // go实现的双数组
 
 const DAT_END_POS = -2147483648
 
 var (
-	initArrayLen int = 64        // 数组初始长度
+	initArrayLen int = 32        // 数组初始长度
 	maxArrayLen  int = (1 << 24) // 数组最大长度
 )
 
@@ -69,6 +65,8 @@ func (gd *GoDat) Initialize(nocase bool) (err error) {
 //   1、按列插入
 //   2、加入链表中，如果一个字符串已经全部加入到dat中，把这个字符串删除
 func (gd *GoDat) BuildWithoutConflict() (err error) {
+	ws := gd.toWords()
+	err = gd.ncBuild(ws)
 	return
 }
 

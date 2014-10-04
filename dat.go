@@ -49,9 +49,17 @@ func (gd *GoDat) add(pat string) error {
 }
 
 // 扩大数组长度
-func (gd *GoDat) extend() (err error) {
+func (gd *GoDat) extend(l int) (err error) {
 	orgLen := len(gd.base)
-	length := orgLen * 2
+	length := orgLen
+	if l == 0 {
+		length = length * 2
+	} else {
+		for length <= l {
+			length = length * 2
+		}
+	}
+
 	fmt.Printf("extend array from %d to %d\n", orgLen, length)
 	if length > gd.maxLen {
 		err = fmt.Errorf("Array cannot exceed dat's maxLen: %d", gd.maxLen)
@@ -99,7 +107,12 @@ func (gd *GoDat) extend() (err error) {
 func (gd *GoDat) buildAux() {
 	// 字符序号从1开始
 	chs := 1
-
+	if gd.auxiliary == nil {
+		gd.auxiliary = make(map[rune]int)
+	}
+	if gd.revAuxiliary == nil {
+		gd.revAuxiliary = make(map[int]rune)
+	}
 	// 给每个字符标定序号
 	for _, pat := range gd.pats {
 		for _, ch := range pat {
@@ -253,7 +266,7 @@ func (gd *GoDat) __find_pos(s, c int) int {
 		}
 	}
 	//fmt.Printf("__find_pos: s=%d c=%d, extend array\n", s, c)
-	if err := gd.extend(); err != nil {
+	if err := gd.extend(0); err != nil {
 		return -1
 	}
 
@@ -294,8 +307,8 @@ func (gd *GoDat) findPos(s, c int) (pos int, exist, conflict bool) {
 		}
 	}
 
-	for pos >= len(gd.base) {
-		if err := gd.extend(); err != nil {
+	if pos >= len(gd.base) {
+		if err := gd.extend(pos); err != nil {
 			pos = -1
 			fmt.Println("extend failed:", err)
 			return
@@ -343,7 +356,7 @@ func (gd *GoDat) nextPos(s, code int) (t int, isEnd bool) {
 // return -1 if cannot found a free pos
 func (gd *GoDat) findNewBase(s int, ca []int) (int, int) {
 	if gd.idles == 0 {
-		if err := gd.extend(); err != nil {
+		if err := gd.extend(0); err != nil {
 			return -1, 0
 		}
 	}
@@ -358,7 +371,7 @@ func (gd *GoDat) findNewBase(s int, ca []int) (int, int) {
 	//}
 	for ; ; pos = -1 * gd.check[pos] {
 		if -1*gd.check[pos] == start {
-			if err := gd.extend(); err != nil {
+			if err := gd.extend(0); err != nil {
 				return -1, 0
 			}
 		}
@@ -375,7 +388,7 @@ func (gd *GoDat) findNewBase(s int, ca []int) (int, int) {
 		for ; i < len(ca); i++ {
 			c := ca[i]
 			if (newbase + c) >= arrLen {
-				if err := gd.extend(); err != nil {
+				if err := gd.extend(newbase + c); err != nil {
 					fmt.Printf("findNewBase failed: s=%d, ca=%v, pos=%d, base array len=%d newbase=%d\nbase: %v\ncheck: %v\n",
 						s, ca, pos, len(gd.base), newbase, gd.base, gd.check)
 					panic("findNewBase failed inner")
