@@ -17,7 +17,8 @@ double array trie algorithm golang
 
 无冲突构建很快，测试使用本目录下dictionary.txt中的58万多条数据构建时，不到2分钟即可完成
 
-`   
+`
+
 	gd := GoDat{pats: pats}
 	
 	gd.Initialize(true)
