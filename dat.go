@@ -5,17 +5,20 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
+func assert(cond bool, err string) {
+	if cond == false {
+		panic(err)
+	}
+}
+
 func (gd *GoDat) build() (err error) {
-	//fmt.Println(gd.pats)
-	for i, s := range gd.pats {
-		if err = gd.buildPattern(s); err != nil {
+	for _, s := range gd.pats {
+		if err = gd.insertPattern(s); err != nil {
 			return
 		}
-		fmt.Println(i, "+++++++After insert", s)
-		//fmt.Println("base array:", gd.base)
-		//fmt.Println("check array:", gd.check)
 	}
 	return
 }
@@ -68,9 +71,11 @@ func (gd *GoDat) extend(l int) (err error) {
 
 	base := make([]int, length)
 	check := make([]int, length)
+	attrs := make([]uint, length)
 
 	copy(base, gd.base)
 	copy(check, gd.check)
+	copy(attrs, gd.attrs)
 
 	// 将base和check数组的新元素连接起来
 	for i := orgLen; i < length; i++ {
@@ -98,6 +103,8 @@ func (gd *GoDat) extend(l int) (err error) {
 
 	gd.base = base
 	gd.check = check
+	gd.attrs = attrs
+
 	gd.idles += orgLen
 
 	//fmt.Println("After extend:\nbase:", gd.base, "\ncheck:", gd.check)
@@ -157,14 +164,16 @@ func (gd *GoDat) addLink(s int) {
 		t := gd.check[0]
 		// 找到s的下一个空节点位置
 		if s > t {
-			for t = -1 * gd.check[t]; t != gd.check[0] && t < s; {
-				if t < 0 || t > len(gd.check) {
-					fmt.Println("base:", gd.base)
-					fmt.Println("check:", gd.check)
-					fmt.Println("addLink: s=", s, "t=", t)
-					panic("invalid t")
+			//for t = -1 * gd.check[t]; t != gd.check[0] && t < s; {
+			//	t = -1 * gd.check[t]
+			//}
+			for t = s; t < gd.maxLen; t++ {
+				if gd.check[t] < 0 {
+					break
 				}
-				t = -1 * gd.check[t]
+			}
+			if t == gd.maxLen {
+				t = gd.check[0]
 			}
 		}
 
@@ -229,22 +238,6 @@ func (gd *GoDat) sort() {
 
 	// 对pattern排序, 节省空间
 	sort.Sort(sort.StringSlice(gd.pats))
-
-	if !gd.nocase {
-		// 过滤空字符串
-		pats := gd.pats
-		for i, pat := range pats {
-			if pat == "" {
-				if i == len(pats)-1 {
-					gd.pats = []string{}
-					return
-				}
-				gd.pats = pats[i+1:]
-			} else {
-				break
-			}
-		}
-	}
 }
 
 func (gd *GoDat) __find_pos(s, c int) int {
@@ -383,7 +376,7 @@ func (gd *GoDat) findNewBase(s int, ca []int) (int, int) {
 		found := true
 		newbase := pos - ca[0]
 
-		// 0位置跳过
+		// 0位置跳过 why?
 		i := 1
 		for ; i < len(ca); i++ {
 			c := ca[i]
@@ -462,7 +455,11 @@ func (gd *GoDat) reLocate(s, pos, newbase int, ca []int) {
 			//fmt.Printf("i=%d c=%d add idle pos %d, del idle pos %d\n\n", i, c, oldPos, newPos)
 		}
 	}
-	gd.base[s] = newbase
+	if oldbase < 0 {
+		gd.base[s] = -newbase
+	} else {
+		gd.base[s] = newbase
+	}
 }
 
 // 解除冲突 resolve conflicts
@@ -485,7 +482,7 @@ func (gd *GoDat) resolve(s, c int) (newPos int, err error) {
 }
 
 // 增加一个模式
-func (gd *GoDat) buildPattern(pat string) (err error) {
+func (gd *GoDat) insertPattern(pat string) (err error) {
 	var (
 		r          rune
 		c, i, s, t = 0, 0, 0, 0
@@ -496,10 +493,6 @@ func (gd *GoDat) buildPattern(pat string) (err error) {
 	)
 
 	for i, r = range pat {
-		if gd.nocase {
-			r = unicode.ToLower(r)
-		}
-
 		c = gd.auxiliary[r]
 		t, exist, conflict = gd.findPos(s, c)
 		//fmt.Printf("inserted: ch=%v, code=%d, s=%d[base=%d], t=%d, exist=%v, conflict=%v\n", string(r), c, s, gd.base[s], t, exist, conflict)
@@ -537,4 +530,68 @@ func (gd *GoDat) buildPattern(pat string) (err error) {
 	}
 
 	return
+}
+
+// remove a pattern
+func (gd *GoDat) removePattern(pat string) (err error) {
+	var (
+		r     rune
+		i, tl int
+		c, pc int
+		s, t  int
+		code  int
+		base  int
+		idx   int
+	)
+
+	if gd.Match(pat, 0) == false {
+		return fmt.Errorf("pattern is not in dat, cannot remove.")
+	}
+
+	// remove pattern from dat
+	if gd.nocase {
+		pat = strings.ToLower(pat)
+	}
+
+	r, i = utf8.DecodeRuneInString(pat[0:])
+	idx = gd.binSearch(pat[0:i])
+
+	for tl = 0; tl < len(pat); {
+		r, i = utf8.DecodeRuneInString(pat[tl:])
+
+		c = gd.commonCount(pat[0:tl+i], idx)
+		if c <= 1 {
+			break
+		}
+
+		code = gd.auxiliary[r]
+		base = gd.base[s]
+		if base >= 0 {
+			t = base + code
+		} else {
+			t = -base + code
+		}
+
+		s = t
+		pc = c
+		tl += i
+	}
+
+	// 该pat是其他模式的公共串
+	if tl == len(pat) {
+		return nil
+	}
+
+	assert(gd.base[t] < 0)
+	if pc == 2 && base < 0 {
+
+	}
+	// 执行删除
+	for tl < len(pat) {
+
+	}
+
+	// remove pattern from string array
+
+	return nil
 }

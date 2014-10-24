@@ -30,7 +30,7 @@ func (gd *GoDat) backtrace(s int, endRune rune) []int {
 			code = s - (-1 * prevBase)
 		} else {
 			// prev base 不应该为DAT_END_POS，如果prev base==DAT_END_POS, 就不会产生冲突，也就不需要backtrace
-			panic("prevBase should be be DAT_END_POS")
+			panic("prevBase should NOT be DAT_END_POS")
 		}
 		if code <= 0 {
 			fmt.Printf("s=%d, prevPos=%d, prevBase=%d, code=%d, res=%s\n", s, prevPos, prevBase, code, res)
@@ -137,4 +137,23 @@ func (gd *GoDat) binSearch(p string) int {
 	}
 
 	return right
+}
+
+// idx 从patterns[idx]开始搜索
+// 获取以pattern[0:N]为公共子串的个数
+func (gd *GoDat) commonCount(pattern string, idx int) int {
+	var (
+		l     int = len(pattern)
+		start int
+	)
+	for start = idx; start < gd.maxLen; start++ {
+		if len(gd.pats) < l {
+			break
+		}
+		if gd.pats[start][0:l] != pattern {
+			break
+		}
+	}
+
+	return start - idx
 }

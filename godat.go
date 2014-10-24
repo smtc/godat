@@ -14,6 +14,7 @@ type GoDat struct {
 	name  string // optional, dat name
 	base  []int  // base 表
 	check []int  // check 表
+	attrs []uint // attr 表
 	// 辅助词表, 根据字(rune)来查找该字在base数组中的位置(下标)
 	// 如果ascii为true，则不需要辅助词表
 	auxiliary    map[rune]int
@@ -46,6 +47,8 @@ func (gd *GoDat) Initialize(nocase bool) (err error) {
 
 	gd.base = make([]int, initArrayLen)
 	gd.check = make([]int, initArrayLen)
+	gd.attrs = make([]uint, initArrayLen)
+
 	gd.auxiliary = make(map[rune]int)
 	gd.revAuxiliary = make(map[int]rune)
 
@@ -71,8 +74,14 @@ func (gd *GoDat) BuildWithoutConflict() (err error) {
 }
 
 // 匹配
+// params:
+//   opt: options
+//      1: exact match
+//      2: max match if possible, with gd.attrs
+//      3: max match if any pattern found
+//      4: min common pattern match
 //
-func (gd *GoDat) Match(noodle string) bool {
+func (gd *GoDat) Match(noodle string, opt int) bool {
 	res := true
 	s := 0
 	t := 0

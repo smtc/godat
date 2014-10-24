@@ -68,9 +68,9 @@ func TestNoConflict(t *testing.T) {
 	gd.BuildWithoutConflict()
 }
 
-func testBuildDat(t *testing.T) {
+func TestBuildDat(t *testing.T) {
 	pats := []string{
-		/*"abcd",
+		"abcd",
 		"aa", "aaa",
 		"ad",
 		"aceiw",
@@ -93,7 +93,7 @@ func testBuildDat(t *testing.T) {
 		"香港特别行政区基本法起草委员会", "八千一百三十七万七千二百三十六口",
 		"八千一百三十七萬七千二百三十六口", "第九屆全國人民代表大會常務委員會",
 		"第九届全国人民代表大会常务委员会", "劳动和社会保障部职业技能鉴定中",
-		*/
+
 		"1号店",
 		"1號店",
 		"4S店",
@@ -133,9 +133,9 @@ func testBuildDat(t *testing.T) {
 	}
 }
 
-func TestBuildDict(t *testing.T) {
+func testBuildDict(t *testing.T) {
 	gd := GoDat{}
-	f, err := os.Open("./dictionary.txt")
+	f, err := os.Open("./dict1.txt")
 	if err != nil {
 		t.Fatal("open dictionary file failed!\n")
 	}
@@ -149,8 +149,8 @@ func TestBuildDict(t *testing.T) {
 	}
 	gd.Initialize(false)
 	gd.dump()
-	//gd.build()
-	gd.BuildWithoutConflict()
+	gd.build()
+	//gd.BuildWithoutConflict()
 
 	for _, pat := range gd.pats {
 		if gd.Match(pat) == false {
