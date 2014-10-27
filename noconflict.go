@@ -16,6 +16,7 @@ func (gd *GoDat) toWords() []Words {
 		cnt int
 		m   = make(map[string]bool)
 	)
+
 	ws := make([]Words, len(gd.pats))
 	for _, pat := range gd.pats {
 		if _, ok := m[pat]; ok {
@@ -51,11 +52,6 @@ func (gd *GoDat) ncBuild(ws []Words) error {
 		err    error
 	)
 
-	fmt.Println(len(gd.pats))
-	//fmt.Println(gd.pats)
-	//for i, pat := range gd.pats {
-	//	fmt.Println(i, pat)
-	//}
 	// 首字符
 	codes = gd.prefixRune(ws, -1, 0)
 	stacks = append(stacks, buildStack{len(codes), 0, 0})
@@ -124,10 +120,6 @@ func (gd *GoDat) ncBuild(ws []Words) error {
 				t = gd.base[s] + nextChar //gd.auxiliary[r]
 			}
 
-			//fmt.Printf("    i=%d s=%d t=%d r=%v  codes=%v stack.column=%d\n", i, s, t, r, codes, stack.column)
-			//fmt.Println("   ", gd.base, "\n   ", gd.check)
-			//fmt.Println("    stacks:", len(stacks), stacks)
-
 			s = t
 		}
 
@@ -135,7 +127,6 @@ func (gd *GoDat) ncBuild(ws []Words) error {
 		if cursor%1000 == 0 {
 			fmt.Printf("build %d patterns\n", cursor)
 		}
-
 	}
 	return nil
 }

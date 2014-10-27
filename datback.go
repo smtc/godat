@@ -145,15 +145,23 @@ func (gd *GoDat) commonCount(pattern string, idx int) int {
 	var (
 		l     int = len(pattern)
 		start int
+		cnt   int
+		rm    = make(map[rune]bool)
 	)
-	for start = idx; start < gd.maxLen; start++ {
-		if len(gd.pats) < l {
+	for start = idx; start < len(gd.pats); start++ {
+		pat := gd.pats[start]
+		if len(pat) < l {
 			break
 		}
-		if gd.pats[start][0:l] != pattern {
+		if pat[0:l] != pattern {
 			break
+		}
+		r, _ := utf8.DecodeRuneInString(pat[l:])
+		if _, ok := rm[r]; !ok {
+			cnt++
+			rm[r] = true
 		}
 	}
 
-	return start - idx
+	return cnt
 }

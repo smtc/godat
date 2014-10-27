@@ -39,10 +39,10 @@ func TestNoConflict(t *testing.T) {
 		"香港特别行政区基本法起草委员会", "八千一百三十七万七千二百三十六口",
 		"八千一百三十七萬七千二百三十六口", "第九屆全國人民代表大會常務委員會",
 		"第九届全国人民代表大会常务委员会", "劳动和社会保障部职业技能鉴定中",
-		//"1号店",
-		//"1號店",
-		//"4S店",
-		//"4s店",
+		"1号店",
+		"1號店",
+		"4S店",
+		"4s店",
 		"AA制",
 		"AB型",
 		"AT&T",
@@ -78,6 +78,7 @@ func TestBuildDat(t *testing.T) {
 		"asd", "aglmnqioew",
 		"bbbbb",
 		"c",
+		"中", "中华", "中华人",
 		"bbbbbbae",
 		"http://www.sina.cn", "alpha", "aaa", "zzbc", "fals", "hi!", "ab", "cc", "ca", "sets",
 		"wow", "baa", "ma", "mm",
@@ -93,7 +94,6 @@ func TestBuildDat(t *testing.T) {
 		"香港特别行政区基本法起草委员会", "八千一百三十七万七千二百三十六口",
 		"八千一百三十七萬七千二百三十六口", "第九屆全國人民代表大會常務委員會",
 		"第九届全国人民代表大会常务委员会", "劳动和社会保障部职业技能鉴定中",
-
 		"1号店",
 		"1號店",
 		"4S店",
@@ -121,16 +121,29 @@ func TestBuildDat(t *testing.T) {
 	if err != nil {
 		t.Fatal("create dat failed:", err)
 	}
-	gd.dump()
+	//fmt.Println(gd.pats)
+	//gd.dump()
 
-	for _, pat := range gd.pats {
-		if gd.Match(pat) == false {
-			t.Fatal("match should be true:" + pat)
+	for len(gd.pats) != 0 {
+		pat := gd.pats[0]
+		if gd.Match(pat, 0) == false {
+			t.Fatal("Not found pat" + pat)
 		}
+
+		res := 0
+		res, err = gd.removePat(pat)
+		if err != nil {
+			t.Fatal(err, res)
+		}
+		if gd.Match(pat, 0) == true {
+			fmt.Println("should not match " + pat + ", which has been deleted.")
+		}
+
 		//if gd.Match(pat+"!") == true {
 		//	t.Fatal("match should be false")
 		//}
 	}
+	//gd.dump()
 }
 
 func testBuildDict(t *testing.T) {
@@ -148,12 +161,12 @@ func testBuildDict(t *testing.T) {
 		gd.add(segs[0])
 	}
 	gd.Initialize(false)
-	gd.dump()
+	//gd.dump()
 	gd.build()
 	//gd.BuildWithoutConflict()
 
 	for _, pat := range gd.pats {
-		if gd.Match(pat) == false {
+		if gd.Match(pat, 0) == false {
 			//t.Fatal("match should be true:" + pat)
 			fmt.Println(pat, "should be match")
 		}

@@ -30,13 +30,13 @@ func (gd *GoDat) dump() {
 	}
 	fmt.Printf("options: nocase=%v\n", gd.nocase)
 	fmt.Printf("array length = %d, idles = %d\n", len(gd.base), gd.idles)
-	if len(gd.base) <= 1024 {
+	if len(gd.base) <= 256 {
 		for i := 0; i < len(gd.base); i++ {
 			fmt.Printf("GoDat array index %d: %d    %d\n", i, gd.base[i], gd.check[i])
 		}
 	}
 	fmt.Println("aux:", len(gd.auxiliary))
-	if len(gd.auxiliary) <= 256 {
+	if len(gd.auxiliary) <= 64 {
 		for k, v := range gd.auxiliary {
 			fmt.Printf("    %s(%v): %d\n", string(k), k, v)
 		}
@@ -63,7 +63,6 @@ func (gd *GoDat) extend(l int) (err error) {
 		}
 	}
 
-	fmt.Printf("extend array from %d to %d\n", orgLen, length)
 	if length > gd.maxLen {
 		err = fmt.Errorf("Array cannot exceed dat's maxLen: %d", gd.maxLen)
 		return
@@ -221,20 +220,25 @@ func (gd *GoDat) sort() {
 		return
 	}
 
-	// 转换大小写, 过滤空字符串
-	if gd.nocase {
-		pats := make([]string, len(gd.pats))
-		cnt := 0
-		for i := 0; i < len(gd.pats); i++ {
-			pat := gd.pats[i]
-			if pat == "" {
-				continue
-			}
-			pats[cnt] = strings.ToLower(pat)
+	// 过滤空字符串, 去重
+	m := make(map[string]bool)
+	pats := make([]string, len(gd.pats))
+	cnt := 0
+	for i := 0; i < len(gd.pats); i++ {
+		pat := gd.pats[i]
+		if pat == "" {
+			continue
+		}
+		if gd.nocase { // 转换大小写
+			pat = strings.ToLower(pat)
+		}
+		if ok := m[pat]; !ok {
+			m[pat] = true
+			pats[cnt] = pat
 			cnt++
 		}
-		gd.pats = pats[0:cnt]
 	}
+	gd.pats = pats[0:cnt]
 
 	// 对pattern排序, 节省空间
 	sort.Sort(sort.StringSlice(gd.pats))
@@ -321,30 +325,6 @@ func (gd *GoDat) findPos(s, c int) (pos int, exist, conflict bool) {
 	return
 }
 
-//
-func (gd *GoDat) nextPos(s, code int) (t int, isEnd bool) {
-
-	if gd.base[s] == DAT_END_POS {
-		// 结束状态
-		return -1, true
-	}
-	if s == 0 {
-		t = gd.base[0] + code
-	} else {
-		if gd.base[s] > 0 {
-			t = gd.base[s] + code
-		} else {
-			t = -1*gd.base[s] + code
-			isEnd = true
-		}
-	}
-
-	if gd.check[t] != s {
-		t = -1
-	}
-	return
-}
-
 // find new base
 // return -1 if cannot found a free pos
 func (gd *GoDat) findNewBase(s int, ca []int) (int, int) {
@@ -376,19 +356,18 @@ func (gd *GoDat) findNewBase(s int, ca []int) (int, int) {
 		found := true
 		newbase := pos - ca[0]
 
-		// 0位置跳过 why?
+		// 0位置跳过
 		i := 1
 		for ; i < len(ca); i++ {
 			c := ca[i]
 			if (newbase + c) >= arrLen {
 				if err := gd.extend(newbase + c); err != nil {
-					fmt.Printf("findNewBase failed: s=%d, ca=%v, pos=%d, base array len=%d newbase=%d\nbase: %v\ncheck: %v\n",
-						s, ca, pos, len(gd.base), newbase, gd.base, gd.check)
-					panic("findNewBase failed inner")
+					panic(fmt.Sprintf("findNewBase failed: s=%d, ca=%v, pos=%d, array_len=%d, newbase=%d",
+						s, ca, pos, len(gd.base), newbase))
 					return -1, 0
 				}
 				arrLen = len(gd.base)
-				fmt.Printf(">>>>>>>>>>>>>>>>>>extended: newBase=%d, c=%d arrLen=%d\n", newbase, c, arrLen)
+				// fmt.Printf(">>>>>>>>>>>>>>>>>>extended: newBase=%d, c=%d arrLen=%d\n", newbase, c, arrLen)
 			}
 			if gd.check[newbase+c] >= 0 {
 				found = false
@@ -401,9 +380,7 @@ func (gd *GoDat) findNewBase(s int, ca []int) (int, int) {
 		}
 	}
 
-	fmt.Printf("findNewBase failed: s=%d, ca=%v, pos=%d, base array len=%d\nbase: %v\ncheck: %v\n",
-		s, ca, pos, len(gd.base), gd.base, gd.check)
-	panic("findNewBase failed")
+	panic(fmt.Sprintf("findNewBase failed: s=%d, ca=%v, pos=%d, array_len=%d", s, ca, pos, len(gd.base)))
 	return -1, 0
 }
 
@@ -417,7 +394,7 @@ func (gd *GoDat) reLocate(s, pos, newbase int, ca []int) {
 	for i, c := range ca {
 		// 新加入的状态
 		if i == len(ca)-1 {
-			fmt.Printf("i=%d, newbase=%d, c=%d\n", i, newbase, c)
+			// fmt.Printf("i=%d, newbase=%d, c=%d, base[%d]=0\n", i, newbase, c, newbase+c)
 			gd.delLink(newbase + c)
 			gd.check[newbase+c] = s
 			gd.base[newbase+c] = 0
@@ -474,7 +451,7 @@ func (gd *GoDat) resolve(s, c int) (newPos int, err error) {
 	if pos < 0 {
 		return -1, fmt.Errorf("find new base for %d, %d failed.", s, c)
 	}
-	fmt.Printf("find new base: %d for s=%d, c=%d\n", pos, s, c)
+	// fmt.Printf("find new base: %d for s=%d, c=%d\n", pos, s, c)
 	// 重新定位
 	gd.reLocate(s, pos, newbase, ca)
 	newPos = newbase + c
@@ -487,9 +464,9 @@ func (gd *GoDat) insertPattern(pat string) (err error) {
 		r          rune
 		c, i, s, t = 0, 0, 0, 0
 		arrLen     = len(gd.base)
-		patLen     = len(pat)
-		exist      bool
-		conflict   bool
+		//patLen     = len(pat)
+		exist    bool
+		conflict bool
 	)
 
 	for i, r = range pat {
@@ -518,17 +495,13 @@ func (gd *GoDat) insertPattern(pat string) (err error) {
 			}
 		}
 		s = t
-
-		if i == patLen-1 {
-			// r为最后一个字符
-			if gd.base[t] > 0 {
-				gd.base[t] = -1 * gd.base[t]
-			} else if gd.base[t] == 0 {
-				gd.base[t] = DAT_END_POS
-			}
-		}
 	}
-
+	// 最后一个字符
+	if gd.base[t] > 0 {
+		gd.base[t] = -1 * gd.base[t]
+	} else if gd.base[t] == 0 {
+		gd.base[t] = DAT_END_POS
+	}
 	return
 }
 
@@ -559,17 +532,18 @@ func (gd *GoDat) removePattern(pat string) (err error) {
 	for tl = 0; tl < len(pat); {
 		r, i = utf8.DecodeRuneInString(pat[tl:])
 
-		c = gd.commonCount(pat[0:tl+i], idx)
-		if c <= 1 {
-			break
-		}
-
 		code = gd.auxiliary[r]
 		base = gd.base[s]
 		if base >= 0 {
 			t = base + code
 		} else {
 			t = -base + code
+		}
+
+		c = gd.commonCount(pat[0:tl+i], idx)
+		fmt.Printf("  i=%d, tl=%d, r=%v, c=%d, s=%d, t=%d, code=%d, gd.check[s]=%d, gd.check[t]=%d\n", i, tl, string(r), c, s, t, code, gd.check[s], gd.check[t])
+		if c <= 1 {
+			break
 		}
 
 		s = t
@@ -579,19 +553,191 @@ func (gd *GoDat) removePattern(pat string) (err error) {
 
 	// 该pat是其他模式的公共串
 	if tl == len(pat) {
+		assert(gd.base[t] < 0, "gd.base[t] should be less than 0:"+fmt.Sprintf("tl=%d, t=%d, base=%d", tl, t, gd.base[t]))
+		gd.base[t] = -gd.base[t]
 		return nil
 	}
 
-	assert(gd.base[t] < 0)
+	// ab, abc, 删除abc时，将ab的b的base设置为DAT_END_POS
 	if pc == 2 && base < 0 {
-
+		gd.base[s] = DAT_END_POS
 	}
 	// 执行删除
+	//tl += i
 	for tl < len(pat) {
+		r, i = utf8.DecodeRuneInString(pat[tl:])
+		code = gd.auxiliary[r]
+		//s = t
+		base = gd.base[s]
+		fmt.Printf("-- i=%d, tl=%d, r=%v, base[s]=%d, s=%d, t=%d, code=%d, gd.check[s]=%d, gd.check[t]=%d\n", i, tl, string(r), base, s, t, code, gd.check[s], gd.check[t])
+		if base < 0 {
+			// 应该是最后一个字符
+			assert(base == DAT_END_POS, "this pos should be last character, base must be DAT_END_POS")
+			assert(tl == len(pat), "this pos should be last character")
+			t = -base + code
+		} else {
+			t = base + code
+		}
+		assert(gd.check[t] == s, fmt.Sprintf("remove pattern %s: pos %d is not next of pos %d, char at: %v", pat, t, s, r))
 
+		assert(t > 0 && t < gd.maxLen, "pos t is invald: "+
+			fmt.Sprintf("pat=%s, t=%d, s=%d, base=%d, tl=%d, code=%d, r=%v",
+				pat, t, s, base, tl, code, string(r)))
+		gd.addLink(s)
+		s = t
+		tl += i
 	}
 
 	// remove pattern from string array
+	idx = gd.binSearch(pat)
+	gd.pats = append(gd.pats[0:idx], gd.pats[idx+1:]...)
+	fmt.Println(gd.pats)
 
 	return nil
+}
+
+// return:
+//   res = -10: pat有字符不在dat的字符表中，pat不在dat中
+//   res = -20: pat不在dat中
+//   res = -30: pat字符跳转表错误，pat不在dat中
+func (gd *GoDat) removePat(pat string) (res int, err error) {
+	var (
+		i      int
+		r      rune
+		rl     int
+		s, t   int
+		code   int
+		patLen int
+		idx    int
+		base   int
+		nxtCnt int
+	)
+
+	if pat == "" {
+		return
+	}
+	patLen = len(pat)
+	if gd.nocase {
+		pat = strings.ToLower(pat)
+	}
+
+	for i < patLen {
+		r, rl = utf8.DecodeRuneInString(pat[i:])
+		code = gd.auxiliary[r]
+		if code == 0 {
+			res = -10
+			return
+		}
+		base = gd.base[s]
+		if base >= 0 {
+			t = base + code
+		} else {
+			if base == DAT_END_POS {
+				return
+			}
+			t = -base + code
+		}
+
+		if t > len(gd.base) {
+			res = -20
+			return
+		}
+		if gd.check[t] != s {
+			res = -30
+			err = fmt.Errorf("pat %s NOT in dat", pat)
+			return
+		}
+		i += rl
+		s = t
+	}
+	i -= rl
+	if base = gd.base[t]; base > 0 {
+		// 模式pat是其他模式的子串，但模式pat本身不存在
+		res = -40
+		err = fmt.Errorf("pat %s NOT in dat", pat)
+		return
+	}
+
+	assert(base != 0, "base should never be 0 except base[0]")
+	s = gd.check[t]
+	gd.attrs[t] = 0
+	if base == DAT_END_POS {
+		gd.addLink(t)
+	} else {
+		// 模式pat是其他模式的子串
+		assert(base < 0, "base should < 0 here")
+		gd.base[t] = -base
+
+		//fmt.Printf("pat %s is part of other pats, just set base positive.\n", pat)
+		goto delPat
+	}
+
+	// 计算第一个字符在gd.pats的偏移, 使commonPrefix更快
+	_, rl = utf8.DecodeRuneInString(pat[0:])
+	idx = gd.binSearch(pat[0:rl])
+
+	// 从后向前删除
+	r, rl = utf8.DecodeLastRuneInString(pat[0:i])
+	i -= rl
+	for i >= 0 {
+		t = s
+		nxtCnt = gd.commonCount(pat[0:i+rl], idx) - 1
+		//assert(nxtCnt == gd.nextStateCount(t), fmt.Sprintf("commonCount=%d should equal with nextStateCount=%d, t=%d,i=%d, rl=%d",
+		//	nxtCnt, gd.nextStateCount(t), t, i, rl))
+		base = gd.base[t]
+		if base < 0 {
+			// 该节点是另一个模式的结束
+			if nxtCnt == 0 {
+				gd.base[t] = DAT_END_POS
+			}
+
+			goto delPat
+		}
+		if nxtCnt > 0 {
+			goto delPat
+		}
+		s = gd.check[t]
+		gd.addLink(t)
+
+		r, rl = utf8.DecodeLastRuneInString(pat[0:i])
+		if rl == 0 {
+			goto delPat
+		}
+		i -= rl
+	}
+
+delPat:
+	// remove pattern from string array
+	idx = gd.binSearch(pat)
+	gd.pats = append(gd.pats[0:idx], gd.pats[idx+1:]...)
+
+	return
+}
+
+// 计算gd有多少个以subpat为开头的模式
+func (gd *GoDat) nextStateCount(s int) int {
+	var (
+		code int
+		cnt  int
+		base int
+	)
+	base = gd.base[s]
+
+	if base == DAT_END_POS {
+		return 0
+	}
+	if base < 0 {
+		base = -1 * base
+	}
+	for _, code = range gd.auxiliary {
+		if (base + code) >= len(gd.base) {
+			break
+		}
+
+		if gd.check[base+code] == s {
+			cnt++
+		}
+	}
+
+	return cnt
 }

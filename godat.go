@@ -1,5 +1,11 @@
 package godat
 
+import (
+	"fmt"
+	"strings"
+	"unicode/utf8"
+)
+
 // double array trie algorithm implement in golang
 // go实现的双数组
 
@@ -34,7 +40,7 @@ func CreateGoDat(pats []string, nocase bool) (gd *GoDat, err error) {
 	gd = &GoDat{pats: pats}
 
 	gd.Initialize(nocase)
-	gd.dump()
+	// gd.dump()
 	gd.build()
 
 	return
@@ -64,9 +70,9 @@ func (gd *GoDat) Initialize(nocase bool) (err error) {
 
 // 无冲突版本
 // 实现原理:
-//   0、排序
+//
 //   1、按列插入
-//   2、加入链表中，如果一个字符串已经全部加入到dat中，把这个字符串删除
+//
 func (gd *GoDat) BuildWithoutConflict() (err error) {
 	ws := gd.toWords()
 	err = gd.ncBuild(ws)
@@ -82,28 +88,51 @@ func (gd *GoDat) BuildWithoutConflict() (err error) {
 //      4: min common pattern match
 //
 func (gd *GoDat) Match(noodle string, opt int) bool {
-	res := true
-	s := 0
-	t := 0
+	var (
+		i, rl int
+		s, t  int
+		base  int
+		ch    rune
+		code  int
+		res   bool = true
+	)
 
-	for _, ch := range noodle {
-		code := gd.auxiliary[ch]
+	if gd.nocase {
+		noodle = strings.ToLower(noodle)
+	}
+
+	for i = 0; i < len(noodle); {
+		ch, rl = utf8.DecodeRuneInString(noodle[i:])
+		i += rl
+		code = gd.auxiliary[ch]
 		if code == 0 {
+			// 不存在
 			return false
 		}
-		t, _ = gd.nextPos(s, code)
-		/*
-			if t > 0 {
-				fmt.Printf("    ch=%s, code=%d, t=%d, base[%d]=%d, check[%d]=%d\n", string(ch), code, t, t, gd.base[t], t, gd.check[t])
-			} else {
-				fmt.Printf("    ch=%s, code=%d, t=%d\n", string(ch), code, t)
-			}
-		*/
-		if t < 0 {
-			res = false
+		base = gd.base[s]
+
+		if base >= 0 {
+			t = base + code
+		} else if base == DAT_END_POS {
 			break
+		} else {
+			t = -base + code
 		}
+		if gd.check[t] != s {
+			return false
+		}
+
 		s = t
+	}
+	if i != len(noodle) {
+		return false
+	}
+
+	if gd.base[t] >= 0 {
+		if gd.base[t] == 0 {
+			fmt.Printf("!!!!!base %d should NOT be 0.\n", t)
+		}
+		return false
 	}
 	return res
 }
