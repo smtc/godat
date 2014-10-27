@@ -131,7 +131,7 @@ func TestBuildDat(t *testing.T) {
 		}
 
 		res := 0
-		res, err = gd.removePat(pat)
+		res, err = gd.removePattern(pat)
 		if err != nil {
 			t.Fatal(err, res)
 		}

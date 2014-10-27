@@ -505,102 +505,11 @@ func (gd *GoDat) insertPattern(pat string) (err error) {
 	return
 }
 
-// remove a pattern
-func (gd *GoDat) removePattern(pat string) (err error) {
-	var (
-		r     rune
-		i, tl int
-		c, pc int
-		s, t  int
-		code  int
-		base  int
-		idx   int
-	)
-
-	if gd.Match(pat, 0) == false {
-		return fmt.Errorf("pattern is not in dat, cannot remove.")
-	}
-
-	// remove pattern from dat
-	if gd.nocase {
-		pat = strings.ToLower(pat)
-	}
-
-	r, i = utf8.DecodeRuneInString(pat[0:])
-	idx = gd.binSearch(pat[0:i])
-
-	for tl = 0; tl < len(pat); {
-		r, i = utf8.DecodeRuneInString(pat[tl:])
-
-		code = gd.auxiliary[r]
-		base = gd.base[s]
-		if base >= 0 {
-			t = base + code
-		} else {
-			t = -base + code
-		}
-
-		c = gd.commonCount(pat[0:tl+i], idx)
-		fmt.Printf("  i=%d, tl=%d, r=%v, c=%d, s=%d, t=%d, code=%d, gd.check[s]=%d, gd.check[t]=%d\n", i, tl, string(r), c, s, t, code, gd.check[s], gd.check[t])
-		if c <= 1 {
-			break
-		}
-
-		s = t
-		pc = c
-		tl += i
-	}
-
-	// 该pat是其他模式的公共串
-	if tl == len(pat) {
-		assert(gd.base[t] < 0, "gd.base[t] should be less than 0:"+fmt.Sprintf("tl=%d, t=%d, base=%d", tl, t, gd.base[t]))
-		gd.base[t] = -gd.base[t]
-		return nil
-	}
-
-	// ab, abc, 删除abc时，将ab的b的base设置为DAT_END_POS
-	if pc == 2 && base < 0 {
-		gd.base[s] = DAT_END_POS
-	}
-	// 执行删除
-	//tl += i
-	for tl < len(pat) {
-		r, i = utf8.DecodeRuneInString(pat[tl:])
-		code = gd.auxiliary[r]
-		//s = t
-		base = gd.base[s]
-		fmt.Printf("-- i=%d, tl=%d, r=%v, base[s]=%d, s=%d, t=%d, code=%d, gd.check[s]=%d, gd.check[t]=%d\n", i, tl, string(r), base, s, t, code, gd.check[s], gd.check[t])
-		if base < 0 {
-			// 应该是最后一个字符
-			assert(base == DAT_END_POS, "this pos should be last character, base must be DAT_END_POS")
-			assert(tl == len(pat), "this pos should be last character")
-			t = -base + code
-		} else {
-			t = base + code
-		}
-		assert(gd.check[t] == s, fmt.Sprintf("remove pattern %s: pos %d is not next of pos %d, char at: %v", pat, t, s, r))
-
-		assert(t > 0 && t < gd.maxLen, "pos t is invald: "+
-			fmt.Sprintf("pat=%s, t=%d, s=%d, base=%d, tl=%d, code=%d, r=%v",
-				pat, t, s, base, tl, code, string(r)))
-		gd.addLink(s)
-		s = t
-		tl += i
-	}
-
-	// remove pattern from string array
-	idx = gd.binSearch(pat)
-	gd.pats = append(gd.pats[0:idx], gd.pats[idx+1:]...)
-	fmt.Println(gd.pats)
-
-	return nil
-}
-
 // return:
 //   res = -10: pat有字符不在dat的字符表中，pat不在dat中
 //   res = -20: pat不在dat中
 //   res = -30: pat字符跳转表错误，pat不在dat中
-func (gd *GoDat) removePat(pat string) (res int, err error) {
+func (gd *GoDat) removePattern(pat string) (res int, err error) {
 	var (
 		i      int
 		r      rune
