@@ -31,6 +31,9 @@ double array trie algorithm golang
 `
 参数：
 	noodle: 待查找的字符串
+	
 	opt: 0 精确查找
+	
 		 1 通匹配 (插入时需要设置通匹配属性)
+		 
 		 2 最短查找
