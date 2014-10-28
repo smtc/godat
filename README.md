@@ -29,7 +29,9 @@ double array trie algorithm golang
 `
 	func (gd *GoDat) Match(noodle string, opt int) bool
 `
+
 参数：
+
 	noodle: 待查找的字符串
 	
 	opt: 0 精确查找
